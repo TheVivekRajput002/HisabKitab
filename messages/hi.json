@@ -1,0 +1,100 @@
+{
+    "common": {
+        "back": "वापस",
+        "search": "खोजें",
+        "loading": "लोड हो रहा है...",
+        "save": "सहेजें",
+        "cancel": "रद्द करें",
+        "delete": "हटाएं",
+        "edit": "संपादित करें",
+        "add": "जोड़ें",
+        "export": "निर्यात करें",
+        "print": "प्रिंट करें",
+        "clear": "साफ़ करें",
+        "apply": "लागू करें",
+        "select": "चुनें",
+        "selectAll": "सभी चुनें",
+        "selected": "चयनित",
+        "noData": "कोई डेटा नहीं मिला",
+        "error": "एक त्रुटि हुई"
+    },
+    "navigation": {
+        "home": "होम",
+        "billing": "बिलिंग",
+        "inventory": "इन्वेंटरी",
+        "customer": "ग्राहक",
+        "purchase": "खरीद",
+        "staff": "स्टाफ",
+        "reports": "रिपोर्ट"
+    },
+    "invoice": {
+        "title": "चालान खोज",
+        "invoiceNumber": "चालान संख्या",
+        "customerName": "ग्राहक का नाम",
+        "phoneNumber": "फ़ोन नंबर",
+        "date": "तारीख",
+        "amount": "राशि",
+        "status": "स्थिति",
+        "unpaidAmount": "कुल अवैतनिक राशि",
+        "totalInvoices": "कुल चालान",
+        "paid": "भुगतान किया गया",
+        "unpaid": "अवैतनिक",
+        "allStatus": "सभी स्थिति",
+        "allMethods": "सभी तरीके",
+        "exportCSV": "CSV निर्यात करें",
+        "sendWhatsApp": "व्हाट्सएप",
+        "invoices": "चालान",
+        "noInvoicesFound": "कोई चालान नहीं मिला",
+        "clearFilters": "फ़िल्टर साफ़ करें",
+        "dateFrom": "तारीख से",
+        "dateTo": "तारीख तक",
+        "sortBy": "क्रमबद्ध करें",
+        "sortDateNewest": "तारीख (नवीनतम)",
+        "sortDateOldest": "तारीख (पुरानी)",
+        "sortAmountHigh": "राशि (उच्चतम)",
+        "sortAmountLow": "राशि (न्यूनतम)",
+        "sortCustomer": "ग्राहक (अ-ज्ञ)",
+        "paymentMethod": "भुगतान का तरीका",
+        "cash": "नकद",
+        "online": "ऑनलाइन",
+        "page": "पृष्ठ",
+        "of": "का"
+    },
+    "estimate": {
+        "title": "अनुमान खोज",
+        "estimateNumber": "अनुमान संख्या",
+        "estimates": "अनुमान",
+        "noEstimatesFound": "कोई अनुमान नहीं मिला"
+    },
+    "customer": {
+        "title": "ग्राहक",
+        "addCustomer": "ग्राहक जोड़ें",
+        "customerDetails": "ग्राहक विवरण",
+        "address": "पता",
+        "gstin": "जीएसटीआईएन"
+    },
+    "inventory": {
+        "title": "इन्वेंटरी",
+        "productName": "उत्पाद का नाम",
+        "hsnCode": "एचएसएन कोड",
+        "stock": "स्टॉक",
+        "purchaseRate": "खरीद दर",
+        "sellingRate": "बिक्री दर",
+        "category": "श्रेणी"
+    },
+    "vendor": {
+        "title": "विक्रेता",
+        "vendorName": "विक्रेता का नाम",
+        "bills": "बिल",
+        "scanner": "चालान स्कैनर"
+    },
+    "filters": {
+        "applyFilters": "फ़िल्टर लागू करें",
+        "clearAll": "सभी फ़िल्टर साफ़ करें",
+        "activeFilters": "सक्रिय फ़िल्टर"
+    },
+    "actions": {
+        "bulkActions": "थोक क्रियाएं",
+        "selectItems": "थोक क्रियाओं के लिए आइटम चुनें"
+    }
+}

@@ -1,0 +1,100 @@
+{
+    "common": {
+        "back": "Back",
+        "search": "Search",
+        "loading": "Loading...",
+        "save": "Save",
+        "cancel": "Cancel",
+        "delete": "Delete",
+        "edit": "Edit",
+        "add": "Add",
+        "export": "Export",
+        "print": "Print",
+        "clear": "Clear",
+        "apply": "Apply",
+        "select": "Select",
+        "selectAll": "Select All",
+        "selected": "selected",
+        "noData": "No data found",
+        "error": "An error occurred"
+    },
+    "navigation": {
+        "home": "Home",
+        "billing": "Billing",
+        "inventory": "Inventory",
+        "customer": "Customer",
+        "purchase": "Purchase",
+        "staff": "Staff",
+        "reports": "Reports"
+    },
+    "invoice": {
+        "title": "Invoice Search",
+        "invoiceNumber": "Invoice Number",
+        "customerName": "Customer Name",
+        "phoneNumber": "Phone Number",
+        "date": "Date",
+        "amount": "Amount",
+        "status": "Status",
+        "unpaidAmount": "Total Unpaid Amount",
+        "totalInvoices": "Total Invoices",
+        "paid": "Paid",
+        "unpaid": "Unpaid",
+        "allStatus": "All Status",
+        "allMethods": "All Methods",
+        "exportCSV": "Export CSV",
+        "sendWhatsApp": "WhatsApp",
+        "invoices": "Invoices",
+        "noInvoicesFound": "No invoices found",
+        "clearFilters": "Clear filters",
+        "dateFrom": "From Date",
+        "dateTo": "To Date",
+        "sortBy": "Sort By",
+        "sortDateNewest": "Date (Newest)",
+        "sortDateOldest": "Date (Oldest)",
+        "sortAmountHigh": "Amount (Highest)",
+        "sortAmountLow": "Amount (Lowest)",
+        "sortCustomer": "Customer (A-Z)",
+        "paymentMethod": "Payment Method",
+        "cash": "Cash",
+        "online": "Online",
+        "page": "Page",
+        "of": "of"
+    },
+    "estimate": {
+        "title": "Estimate Search",
+        "estimateNumber": "Estimate Number",
+        "estimates": "Estimates",
+        "noEstimatesFound": "No estimates found"
+    },
+    "customer": {
+        "title": "Customers",
+        "addCustomer": "Add Customer",
+        "customerDetails": "Customer Details",
+        "address": "Address",
+        "gstin": "GSTIN"
+    },
+    "inventory": {
+        "title": "Inventory",
+        "productName": "Product Name",
+        "hsnCode": "HSN Code",
+        "stock": "Stock",
+        "purchaseRate": "Purchase Rate",
+        "sellingRate": "Selling Rate",
+        "category": "Category"
+    },
+    "vendor": {
+        "title": "Vendors",
+        "vendorName": "Vendor Name",
+        "bills": "Bills",
+        "scanner": "Invoice Scanner"
+    },
+    "filters": {
+        "applyFilters": "Apply Filters",
+        "clearAll": "Clear All Filters",
+        "activeFilters": "Active Filters"
+    },
+    "actions": {
+        "bulkActions": "Bulk Actions",
+        "selectItems": "Select items for bulk actions"
+    }
+}

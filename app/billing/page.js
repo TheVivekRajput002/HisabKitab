@@ -20,7 +20,7 @@ const Billing = () => {
                             <div className='flex flex-col gap-3'>
 
                                 <Link
-                                    href={"/billing/invoice_search"}
+                                    href={"/billing/invoice/search"}
                                     className='bg-[#3480fb] border-1 py-3 px-6 text-white text-center border-gray-700 rounded-xl'>
                                     <div className='flex gap-2'>
                                         <SearchIcon />
@@ -49,7 +49,7 @@ const Billing = () => {
                             <div className='flex flex-col gap-3'>
 
                                 <Link
-                                    href={"/billing/estimate_search"}
+                                    href={"/billing/estimate/search"}
                                     className='bg-[#3480fb] border-1 py-3 px-6 text-white text-center border-gray-700 rounded-xl'>
                                     <div className='flex gap-2'>
                                         <SearchIcon />

@@ -14,6 +14,7 @@ const InvoiceSummary = ({
     paymentMode,
     onPaymentModeChange,
     onSaveInvoice,
+    onNextInvoice,
     saving,
     canSave,
     invoiceSaved,
@@ -113,14 +114,26 @@ const InvoiceSummary = ({
             <div className="p-6 bg-white border-t-2 border-gray-300">
                 <div className="flex justify-end">
                     <div className="flex gap-3">
-                        <button
-                            onClick={onSaveInvoice}
-                            disabled={!canSave || saving}
-                            className="flex items-center px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-lg shadow-lg"
-                        >
-                            <Save className="mr-2 w-5 h-5" />
-                            {saving ? 'Saving Invoice...' : 'Save Invoice'}
-                        </button>
+                        {!invoiceSaved ? (
+                            <button
+                                onClick={onSaveInvoice}
+                                disabled={!canSave || saving}
+                                className="flex items-center px-8 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold text-lg shadow-lg"
+                            >
+                                <Save className="mr-2 w-5 h-5" />
+                                {saving ? 'Saving...' : 'Save'}
+                            </button>
+                        ) : (
+                            <button
+                                onClick={onNextInvoice}
+                                className="flex items-center px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg shadow-lg"
+                            >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                                Next
+                            </button>
+                        )}
 
                         {invoiceSaved && savedInvoiceData && (
                             <PDFDownloadLink

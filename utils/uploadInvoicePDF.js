@@ -3,6 +3,11 @@ import { supabase } from './supabaseClient';
 
 export const uploadInvoicePDF = async (invoicePDFComponent, invoiceNumber) => {
   try {
+    // Validate component
+    if (!invoicePDFComponent) {
+      throw new Error('PDF component is null or undefined');
+    }
+
     // Generate PDF blob from React component
     const blob = await pdf(invoicePDFComponent).toBlob();
 
@@ -21,11 +26,11 @@ export const uploadInvoicePDF = async (invoicePDFComponent, invoiceNumber) => {
     if (error) throw error;
 
     // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    const { data: urlData } = supabase.storage
       .from('invoices')
       .getPublicUrl(filePath);
 
-    return publicUrl;
+    return urlData.publicUrl;
   } catch (error) {
     console.error('Error uploading PDF:', error);
     throw error;

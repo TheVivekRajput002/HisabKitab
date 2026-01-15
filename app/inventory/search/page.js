@@ -34,7 +34,7 @@ const ProductSkeleton = () => (
     </div>
 );
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 10;
 
 const ProductSearch = () => {
     const [products, setProducts] = useState([]);

@@ -11,18 +11,19 @@ import {
     ChartNoAxesCombined,
     Camera
 } from 'lucide-react';
+// import LanguageSwitcher from './LanguageSwitcher'; // Temporarily disabled until i18n is fully implemented
 
-const Header = ({params}) => {
+const Header = ({ params }) => {
     const [isHovered, setIsHovered] = useState(false);
 
     const navItems = [
         { name: 'Home', to: '/', icon: Home },
-        { name: 'Billing', to: '/billing', icon: ReceiptIndianRupee },
+        { name: 'Sale', to: '/billing', icon: ReceiptIndianRupee },
         { name: 'Customer', to: '/customer', icon: BookUser },
         { name: 'Inventory', to: '/inventory', icon: PackageSearch },
         { name: 'Staff', to: '/staff', icon: PersonStanding },
-        { name: 'Data', to: '/data', icon: ChartNoAxesCombined },
-        { name: 'Scanner', to: '/scanner', icon: Camera },
+        { name: 'Reports', to: '/report', icon: ChartNoAxesCombined },
+        { name: 'Purchase', to: '/vendor', icon: Camera },
     ];
 
     const isActive = (path) => params === path;
@@ -63,8 +64,8 @@ const Header = ({params}) => {
                                     key={item.name}
                                     href={item.to}
                                     className={`w-full flex items-center gap-3 px-4 py-3 mb-1 transition-all duration-200 group relative ${active
-                                            ? 'bg-[#37373d] text-blue-600'
-                                            : 'text-gray-600 hover:bg-blue-500 hover:text-gray-400'
+                                        ? 'bg-[#37373d] text-blue-600'
+                                        : 'text-gray-600 hover:bg-blue-500 hover:text-gray-400'
                                         }`}
                                 >
                                     {/* Active Indicator */}

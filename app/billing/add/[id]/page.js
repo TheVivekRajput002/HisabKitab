@@ -19,9 +19,9 @@ import InvoiceSummary from './InvoiceSummary';
 import { uploadInvoicePDF } from '@/utils/uploadInvoicePDF';
 import { sendInvoiceToWhatsApp } from '@/utils/sendWhatsApp';
 import dynamic from 'next/dynamic';
+import InvoicePDF from './InvoicePDF';
 
-// Lazy load InvoicePDF for better performance
-const InvoicePDF = dynamic(() => import('./InvoicePDF'), { ssr: false });
+
 
 import { ToastContainer } from './Toast';
 
@@ -311,25 +311,6 @@ const InvoiceEstimateAdd = () => {
     })));
   }, [gstIncluded]);
 
-  useEffect(() => {
-    // Reset saved invoice state when user starts filling new details
-    if (invoiceSaved && savedInvoiceData) {
-      const hasStartedNewInvoice =
-        customerDetails.customerName !== '' ||
-        customerDetails.phoneNumber !== '' ||
-        customerDetails.customerAddress !== '' ||
-        customerDetails.vehicle !== '' ||
-        gstin !== '' ||
-        photos.filter(p => !p.uploading).length > 0 ||
-        products.some(p => p.productName !== '' || p.quantity !== '' || p.rate !== '');
-
-      if (hasStartedNewInvoice) {
-        setInvoiceSaved(false);
-        setSavedInvoiceData(null);
-      }
-    }
-  }, [customerDetails, products, gstin, photos, invoiceSaved, savedInvoiceData]);
-
   // Product search
   useEffect(() => {
     const searchProductsFromDB = async (searchQuery, productId) => {
@@ -343,7 +324,7 @@ const InvoiceEstimateAdd = () => {
       try {
         const { data, error } = await supabase
           .from('products')
-          .select('id, product_name, hsn_code, purchase_rate, gst_rate, current_stock, minimum_stock, brand')
+          .select('id, product_name, hsn_code, purchase_rate, gst_percentage, current_stock, minimum_stock, brand')
           .or(`product_name.ilike.%${searchQuery}%,brand.ilike.%${searchQuery}%`)
           .limit(10);
 
@@ -439,7 +420,7 @@ const InvoiceEstimateAdd = () => {
           productName: selectedProduct.product_name,
           hsnCode: selectedProduct.hsn_code,
           rate: selectedProduct.purchase_rate,
-          gstPercentage: selectedProduct.gst_rate || 0
+          gstPercentage: selectedProduct.gst_percentage || 0
         };
 
         updated.totalAmount = calculateProductTotal(
@@ -512,6 +493,55 @@ const InvoiceEstimateAdd = () => {
       }
     } catch (error) {
       console.error('Error in stock deduction:', error);
+    }
+  };
+
+  // Handle Next Invoice - Reset form and prepare for new invoice
+  const handleNextInvoice = async () => {
+    // Reset form
+    setCustomerDetails({ customerName: '', customerAddress: '', vehicle: '', phoneNumber: '' });
+    setProducts([{ id: 1, serialNumber: 1, productName: '', hsnCode: '', quantity: '', rate: '', gstPercentage: 0, totalAmount: 0 }]);
+    setPaymentMode('unpaid');
+    setGstin('');
+    setPhotos([]);
+    setInvoiceSaved(false);
+    setSavedInvoiceData(null);
+    setNewlyAddedProducts(new Set());
+
+    // Fetch next invoice/estimate number
+    if (isInvoice) {
+      try {
+        const { data: counterData, error: counterError } = await supabase
+          .from('invoice_counter')
+          .select('current_number')
+          .eq('id', 1)
+          .single();
+
+        if (!counterError && counterData) {
+          const nextNumber = (counterData.current_number || 0) + 1;
+          setInvoiceNumber(`INV${String(nextNumber).padStart(3, '0')}`);
+        }
+      } catch (fetchError) {
+        console.error('Error fetching updated invoice number:', fetchError);
+      }
+    } else {
+      try {
+        const { data, error } = await supabase
+          .from('estimate')
+          .select('estimate_number')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const lastNumber = parseInt(data[0].estimate_number.replace('EST', ''));
+          const nextNumber = lastNumber + 1;
+          setEstimateNumber(`EST${String(nextNumber).padStart(3, '0')}`);
+        } else {
+          setEstimateNumber('EST001');
+        }
+      } catch (fetchError) {
+        console.error('Error fetching updated estimate number:', fetchError);
+      }
     }
   };
 
@@ -659,32 +689,7 @@ const InvoiceEstimateAdd = () => {
       alert(`${isInvoice ? 'Invoice' : 'Estimate'} saved successfully!`);
       setNewlyAddedProducts(new Set());
 
-      // ✅ Reset form
-      setCustomerDetails({ customerName: '', customerAddress: '', vehicle: '', phoneNumber: '' });
-      setProducts([{ id: 1, serialNumber: 1, productName: '', hsnCode: '', quantity: '', rate: '', gstPercentage: 0, totalAmount: 0 }]);
-      setPaymentMode('unpaid');
-      setGstin('');
-      setPhotos([]);
-
-      // ✅ Fetch updated invoice number preview
-      // ✅ Fetch updated invoice number preview
-      if (isInvoice) {  // ✅ ADD THIS IF
-        try {
-          const { data: counterData, error: counterError } = await supabase
-            .from('invoice_counter')
-            .select('current_number')
-            .eq('id', 1)
-            .single();
-
-          if (!counterError && counterData) {
-            const nextNumber = (counterData.current_number || 0) + 1;
-            setInvoiceNumber(`INV${String(nextNumber).padStart(3, '0')}`);
-          }
-        } catch (fetchError) {
-          console.error('Error fetching updated invoice number:', fetchError);
-        }
-      }  // ✅ ADD THIS CLOSING BRACE
-
+      // Note: Form reset moved to handleNextInvoice function
 
 
     } catch (error) {
@@ -806,6 +811,7 @@ const InvoiceEstimateAdd = () => {
             paymentMode={paymentMode}
             onPaymentModeChange={setPaymentMode}
             onSaveInvoice={saveInvoice}
+            onNextInvoice={handleNextInvoice}
             saving={saving}
             canSave={canSave}
             invoiceSaved={invoiceSaved}
