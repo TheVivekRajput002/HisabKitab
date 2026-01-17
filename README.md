@@ -1,199 +1,68 @@
-# HisabKitab 📊
+# HisabKitab - Business Management System
 
-> A comprehensive business management system for handling invoices, estimates, inventory, vendors, customers, and staff - all in one place.
+A modern, full-featured business management application built with Next.js for managing customers, invoices, estimates, and inventory.
 
-## 🚀 Overview
+## ✨ Features
 
-HisabKitab is a full-stack business management application built with Next.js and Supabase. It provides a complete solution for managing your business operations including billing, inventory tracking, vendor management, and customer relations with advanced features like AI invoice scanning, WhatsApp integration, and real-time analytics.
+### Customer Management
+- **Customer Search & Filter** - Advanced search with filtering by name, phone, vehicle
+- **Customer Details View** - Split-panel interface showing customer info and transaction history
+- **Inline Editing** - Edit customer details without leaving the page
+- **Quick Actions** - Direct dial phone numbers, delete customers with confirmation
+- **Add Customers** - Modal form for quick customer creation
+- **Transaction Tracking** - View all invoices with payment status (Paid/Unpaid)
+- **Analytics** - Total purchases, paid amounts, and unpaid balances
 
-## 📸 Key Features
+### Billing
+- **Invoice Management** - Create, search, and manage sales invoices
+- **Estimate Management** - Create and manage price quotes
+- **Clean UI** - Simple, professional interface with clear action buttons
+- **Quick Navigation** - Easy access to create new or search existing documents
 
-- **AI-Powered Invoice Scanner** - Extract invoice data using Google Gemini AI
-- **Smart Search & Filters** - Advanced search with pagination, sorting, and bulk actions
-- **WhatsApp Integration** - Send invoices/estimates directly via WhatsApp
-- **Real-time Analytics** - Dashboard with sales statistics and insights
-- **QR Code Generation** - Generate QR codes for products
-- **Image Cropping** - Built-in image editor for invoice photos
-- **Export & Print** - CSV export and print functionality
-- **Bulk Operations** - Select and perform actions on multiple items
+### Inventory
+- **Product Management** - Add and search products
+- **Stock Tracking** - Keep track of inventory items
+- **Simple Interface** - Clean, focused design for product operations
+
+### UI/UX Features
+- **Toast Notifications** - Modern, non-intrusive alerts for success/error messages
+- **Keyboard Shortcuts** - Power user shortcuts for quick navigation and actions
+- **Responsive Design** - Works seamlessly on desktop and mobile devices
+- **Modern Design** - Clean, minimal interface with proper whitespace
+- **Smooth Animations** - Subtle transitions and hover effects
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Esc` | Back / Cancel / Exit current screen |
+| `F8` | Create Sales Invoice |
+| `Ctrl + A` | Save |
+| `Alt + C` | Create customer/item inline |
+| `Alt + D` | Delete invoice |
+| `Alt + 2` | Duplicate invoice |
+| `F12` | Invoice settings |
+| `Alt + F2` | Change invoice date |
+| `Ctrl + P` | Print / PDF |
+
+Click the keyboard icon (bottom-right) to view shortcuts anytime.
 
 ## 🛠️ Tech Stack
 
-### Frontend
-- **Next.js 16.1.1** - React framework with App Router
-- **React 19.2.3** - UI library
-- **TailwindCSS 4** - Utility-first CSS framework
-- **Lucide React** - Icon library
-- **Recharts** - Charts and data visualization
-- **React Image Crop** - Image cropping tool
+- **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
+- **Language**: JavaScript/React
+- **Database**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **Styling**: Tailwind CSS
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **UI Components**: Custom components with modern design patterns
 
-### Backend & Database
-- **Supabase** - PostgreSQL database, authentication, and storage
-- **Next.js API Routes** - Serverless API endpoints
-
-### AI & Utilities
-- **Google Gemini AI** - Invoice data extraction
-- **jsPDF** - PDF generation
-- **QRCode** - QR code generation
-- **@react-pdf/renderer** - Advanced PDF rendering
-
-## 📁 Project Structure
-
-```
-HisabKitab/
-├── app/
-│   ├── page.js                    # Home Dashboard
-│   ├── api/
-│   │   └── scan-invoice/          # AI invoice scanning endpoint
-│   ├── billing/
-│   │   ├── page.js                # Billing hub
-│   │   ├── add/[id]/              # Create invoice/estimate
-│   │   ├── invoice/
-│   │   │   ├── search/            # Invoice search with advanced features
-│   │   │   └── [id]/              # Invoice details
-│   │   └── estimate/
-│   │       ├── search/            # Estimate search with advanced features
-│   │       └── [id]/              # Estimate details
-│   ├── inventory/
-│   │   ├── page.js                # Inventory management
-│   │   ├── search/                # Product search with pagination
-│   │   └── [id]/                  # Product details
-│   ├── customer/
-│   │   ├── page.js                # Customer list
-│   │   ├── add/                   # Add new customer
-│   │   ├── search/                # Customer search
-│   │   └── [id]/                  # Customer details
-│   ├── vendor/
-│   │   ├── page.js                # Vendor list
-│   │   ├── scanner/               # AI-powered vendor invoice scanner
-│   │   └── [vendorId]/bills/      # Vendor bill history
-│   ├── staff/
-│   │   └── page.js                # Staff management
-│   └── reports/
-│       └── page.js                # Business reports
-├── components/
-│   └── Header.js                  # Navigation header
-├── utils/
-│   ├── supabaseClient.js          # Supabase client instance
-│   ├── uploadInvoicePDF.js        # PDF upload to Supabase storage
-│   ├── uploadPhoto.js             # Photo upload utility
-│   └── sendWhatsApp.js            # WhatsApp message sender
-└── hooks/
-    ├── useCustomerSearch.js       # Customer search hook
-    ├── useInvoiceCalculations.js  # Invoice calculations
-    └── useProductAutoSave.js      # Product auto-save
-```
-
-## 📄 Pages & Functionality
-
-### 🏠 Home Dashboard (`/`)
-- **Purpose**: Central hub with business overview
-- **Features**:
-  - Quick stats cards (Total Sales, Invoices, Estimates)
-  - Recent activity feed
-  - Sales charts and analytics
-  - Quick action buttons
-
-### 💰 Billing Module (`/billing`)
-
-#### Invoice Management
-- **Search Page** (`/billing/invoice/search`):
-  - Advanced search (invoice number, customer, phone)
-  - 5 sort options (date, amount, customer)
-  - Bulk selection with checkboxes
-  - Export to CSV
-  - Print selected/all
-  - WhatsApp reminders (individual & bulk)
-  - Pagination (10 items/page)
-  - Payment status filters
-  - Date range filtering
-
-- **Create/Edit** (`/billing/add/invoice`):
-  - Customer selection with search
-  - Product selection with auto-save
-  - GST calculations
-  - Payment mode tracking
-  - Photo attachment
-  - Ctrl+S shortcut to save
-
-- **Invoice Details** (`/billing/invoice/[id]`):
-  - Full invoice breakdown
-  - Customer information
-  - Line items with pricing
-  - Payment status
-  - WhatsApp send option
-
-#### Estimate Management
-- **Search Page** (`/billing/estimate/search`):
-  - Same features as invoice search
-  - Convert estimate to invoice option
-
-- **Create/Edit** (`/billing/add/estimate`):
-  - Similar to invoice creation
-  - Estimate-specific numbering
-
-### 📦 Inventory Module (`/inventory`)
-
-- **Inventory List** (`/inventory/page.js`):
-  - Product catalog
-  - Stock levels
-  - Quick actions
-
-- **Search** (`/inventory/search`):
-  - Product search with filters
-  - Category filtering
-  - Stock status filters
-  - Pagination
-
-- **Product Details** (`/inventory/[id]`):
-  - Product information
-  - Stock history
-  - Pricing details
-  - QR code generation
-
-### 👥 Customer Module (`/customer`)
-
-- **Customer List**: All customers with quick stats
-- **Search**: Advanced customer search
-- **Add Customer**: Form with GSTIN, contact details
-- **Customer Details**: Purchase history, outstanding amounts
-
-### 🏭 Vendor Module (`/vendor`)
-
-- **Vendor List**: All vendors
-- **AI Scanner** (`/vendor/scanner`):
-  - **OCR + AI**: Scan vendor invoices using camera/upload
-  - **Image Cropping**: Built-in image editor
-  - **Auto-extraction**: Product details, quantities, prices
-  - **Batch Processing**: Handle multiple products at once
-  - **QR Code Generation**: Generate QR codes for scanned products
-  - **Photo Storage**: Save scanned invoice images to Supabase
-  
-- **Vendor Bills** (`/vendor/[vendorId]/bills`):
-  - Purchase history
-  - Bill details with items
-  - Discount tracking
-  - View invoice photos
-
-### 👔 Staff Module (`/staff`)
-- Staff member management
-- Role assignments
-- Contact information
-
-### 📊 Reports Module (`/reports`)
-- Sales reports
-- Inventory reports
-- Customer analytics
-- Financial summaries
-
-## 🔧 Setup & Installation
+## 📦 Installation
 
 ### Prerequisites
-- Node.js 18+ installed
-- Supabase account
-- Google Gemini API key (for AI features)
+- Node.js 18+ and npm/yarn
+- Supabase account and project
 
-### Installation Steps
+### Setup Steps
 
 1. **Clone the repository**
    ```bash
@@ -204,167 +73,141 @@ HisabKitab/
 2. **Install dependencies**
    ```bash
    npm install
+   # or
+   yarn install
    ```
 
-3. **Environment Variables**
+3. **Configure environment variables**
+   
    Create a `.env.local` file in the root directory:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   GEMINI_API_KEY=your_google_gemini_api_key
    ```
 
-4. **Supabase Setup**
+4. **Set up Supabase database**
    
-   Create the following tables in your Supabase database:
-
-   ```sql
-   -- Customers
-   CREATE TABLE customers (
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     name TEXT NOT NULL,
-     phone_number TEXT,
-     address TEXT,
-     gstin TEXT,
-     created_at TIMESTAMP DEFAULT NOW()
-   );
-
-   -- Products
-   CREATE TABLE products (
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     product_name TEXT NOT NULL,
-     hsn_code TEXT,
-     purchase_rate DECIMAL,
-     selling_rate DECIMAL,
-     stock_quantity INTEGER DEFAULT 0,
-     category TEXT,
-     created_at TIMESTAMP DEFAULT NOW()
-   );
-
-   -- Invoices
-   CREATE TABLE invoices (
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     invoice_number TEXT UNIQUE NOT NULL,
-     customer_id UUID REFERENCES customers(id),
-     bill_date DATE NOT NULL,
-     total_amount DECIMAL NOT NULL,
-     mode_of_payment TEXT,
-     created_at TIMESTAMP DEFAULT NOW()
-   );
-
-   -- Invoice Items
-   CREATE TABLE invoice_items (
-     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-     invoice_id UUID REFERENCES invoices(id),
-     product_id UUID REFERENCES products(id),
-     quantity INTEGER,
-     rate DECIMAL,
-     gst_percentage DECIMAL,
-     total DECIMAL
-   );
-
-   -- Estimates (similar structure to invoices)
-   -- Vendors
-   -- Vendor Bills
-   -- Staff
-   ```
-
-   Set up Supabase Storage buckets:
-   - `invoice-photos` - For scanned invoice images
-   - `pdfs` - For generated PDF invoices
+   Create the following tables in your Supabase project:
+   
+   - `customers` - Stores customer information
+   - `invoices` - Stores invoice data
+   - `products` - Stores inventory items
 
 5. **Run the development server**
    ```bash
    npm run dev
+   # or
+   yarn dev
    ```
 
-6. **Open in browser**
-   ```
-   http://localhost:3000
-   ```
+6. **Open the application**
+   
+   Navigate to [http://localhost:3000](http://localhost:3000)
 
-## 🎯 Core Workflows
+## 📁 Project Structure
 
-### Creating an Invoice
-1. Navigate to `/billing/add/invoice`
-2. Search and select customer
-3. Add products to the invoice
-4. Set payment mode (Cash/Online/Unpaid)
-5. Upload invoice photo (optional)
-6. Save with Ctrl+S or Save button
-7. Send via WhatsApp directly
+```
+HisabKitab/
+├── app/
+│   ├── billing/          # Billing pages (invoices, estimates)
+│   ├── customer/         # Customer management pages
+│   ├── customer1/        # Enhanced customer view with split panel
+│   ├── inventory/        # Inventory management pages
+│   ├── layout.js         # Root layout with header and shortcuts
+│   └── globals.css       # Global styles
+├── components/
+│   ├── Header.js         # Navigation header
+│   └── KeyboardShortcutsHelp.js  # Shortcuts help modal
+├── hooks/
+│   └── useKeyboardShortcuts.js   # Custom keyboard shortcuts hook
+├── utils/
+│   └── supabaseClient.js # Supabase configuration
+└── public/               # Static assets
+```
 
-### Scanning Vendor Invoices
-1. Go to `/vendor/scanner`
-2. Click camera or upload image
-3. Crop image if needed
-4. AI extracts products automatically
-5. Review and edit extracted data
-6. Generate QR codes for products
-7. Save to database
+## 🚀 Usage
 
-### Searching Invoices
-1. Visit `/billing/invoice/search`
-2. Use search fields (invoice #, customer, phone)
-3. Apply filters (status, date range)
-4. Select sort option
-5. Check items for bulk actions
-6. Export CSV, Print, or Send WhatsApp
+### Customer Management
 
-## 🔐 Security Features
+1. **View Customers**: Navigate to `/customer1`
+   - Left panel: Search and filter customers
+   - Right panel: View selected customer details and transactions
 
-- Supabase Row Level Security (RLS) policies
-- Secure API routes
-- Environment variable protection
-- Input validation and sanitization
+2. **Add Customer**: Click "Add Customer" button
+   - Fill in name, phone (required)
+   - Optionally add vehicle and address
+   - Click "Add Customer" to save
 
-## 🚀 Performance Optimizations
+3. **Edit Customer**: Click edit icon next to customer name
+   - Modify details inline
+   - Click "Save Changes" or "Cancel"
 
-- Server-side pagination (10 items/page)
-- Debounced search (300ms)
-- Skeleton loaders for better UX
-- Lazy loading of images
-- Optimized Supabase queries
-- Client-side caching
+4. **Delete Customer**: Click trash icon
+   - Confirmation dialog appears
+   - All customer invoices will be deleted
 
-## 📱 Responsive Design
+### Billing
 
-- Fully responsive across devices
-- Mobile-friendly navigation
-- Touch-optimized controls
-- Adaptive layouts
+1. **Create Invoice**: Navigate to `/billing` → Click "New Invoice"
+2. **Search Invoices**: Click "Search Invoice" to find existing invoices
+3. **Create Estimate**: Click "New Estimate" for price quotes
+4. **Search Estimates**: Click "Search Estimate" to find existing quotes
 
-## 🤝 Contributing
+### Inventory
 
-Contributions are welcome! Please follow these steps:
+1. **Add Product**: Navigate to `/inventory` → Click "Add Product"
+2. **Search Products**: Click "Search Products" to find inventory items
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+## 🎨 Design Philosophy
+
+- **Simplicity First**: Clean, uncluttered interface
+- **Minimal Colors**: Strategic use of blue, orange, and green accents
+- **Proper Whitespace**: Breathing room for better readability
+- **Smooth Interactions**: Subtle animations without distractions
+- **Mobile Responsive**: Works great on all screen sizes
+
+## 🔧 Configuration
+
+### Database Schema
+
+#### Customers Table
+```sql
+- id (uuid, primary key)
+- name (text, required)
+- phone_number (text, required)
+- vehicle (text, optional)
+- address (text, optional)
+- created_at (timestamp)
+```
+
+#### Invoices Table
+```sql
+- id (uuid, primary key)
+- customer_id (uuid, foreign key)
+- invoice_number (text)
+- bill_date (date)
+- total_amount (numeric)
+- mode_of_payment (text: 'cash' | 'online' | 'unpaid')
+- created_at (timestamp)
+```
 
 ## 📝 License
 
 This project is private and proprietary.
 
-## 👨‍💻 Developer
+## 👨‍💻 Development
 
-Built with ❤️ for small businesses
+### Available Scripts
+
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm start` - Start production server
+- `npm run lint` - Run ESLint
+
+### Contributing
+
+Please follow the existing code style and patterns when contributing.
 
 ---
 
-## 🆘 Support
-
-For issues and questions, please open an issue in the repository.
-
-## 🔮 Future Enhancements
-
-- [ ] Multi-user authentication
-- [ ] Role-based access control
-- [ ] Email notifications
-- [ ] Advanced reporting with filters
-- [ ] Mobile app version
-- [ ] Offline mode support
-- [ ] Multi-currency support
-- [ ] Tax calculation enhancements
+Built with ❤️ using Next.js and Supabase
