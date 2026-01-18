@@ -8,7 +8,7 @@ A modern, full-featured business management application built with Next.js for m
 - **Customer Search & Filter** - Advanced search with filtering by name, phone, vehicle
 - **Customer Details View** - Split-panel interface showing customer info and transaction history
 - **Inline Editing** - Edit customer details without leaving the page
-- **Quick Actions** - Direct dial phone numbers, delete customers with confirmation
+- **Quick Actions** - Direct dial phone numbers, delete customers with confirmation 
 - **Add Customers** - Modal form for quick customer creation
 - **Transaction Tracking** - View all invoices with payment status (Paid/Unpaid)
 - **Analytics** - Total purchases, paid amounts, and unpaid balances

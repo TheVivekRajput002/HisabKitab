@@ -66,17 +66,17 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills }) {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
+        <div className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-lg transition-all duration-200">
             {/* Header */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-5">
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Building2 className="text-blue-600" size={24} />
+                    <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Building2 className="text-purple-600" size={24} />
                     </div>
                     <div>
-                        <h3 className="font-bold text-lg text-gray-800">{vendor.name}</h3>
+                        <h3 className="font-bold text-lg text-gray-900">{vendor.name}</h3>
                         {vendor.gstin && (
-                            <p className="text-sm text-gray-500 font-mono">GSTIN: {vendor.gstin}</p>
+                            <p className="text-xs text-gray-500 font-mono mt-0.5">GSTIN: {vendor.gstin}</p>
                         )}
                     </div>
                 </div>
@@ -100,38 +100,38 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills }) {
 
             {/* Stats */}
             {loading ? (
-                <div className="flex items-center justify-center py-4">
+                <div className="flex items-center justify-center py-6">
                     <Loader2 className="animate-spin text-gray-400" size={20} />
                 </div>
             ) : (
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <div className="grid grid-cols-3 gap-3 mb-5">
+                    <div className="text-center py-3 bg-blue-50 rounded-lg">
                         <FileText className="mx-auto mb-1 text-blue-600" size={20} />
                         <p className="text-2xl font-bold text-blue-900">{billStats.total}</p>
-                        <p className="text-xs text-blue-600">Total Bills</p>
+                        <p className="text-xs text-blue-600 mt-0.5">Total Bills</p>
                     </div>
-                    <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                        <AlertCircle className="mx-auto mb-1 text-yellow-600" size={20} />
-                        <p className="text-2xl font-bold text-yellow-900">{billStats.unpaid}</p>
-                        <p className="text-xs text-yellow-600">Unpaid</p>
+                    <div className="text-center py-3 bg-orange-50 rounded-lg">
+                        <AlertCircle className="mx-auto mb-1 text-orange-600" size={20} />
+                        <p className="text-2xl font-bold text-orange-900">{billStats.unpaid}</p>
+                        <p className="text-xs text-orange-600 mt-0.5">Unpaid</p>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                    <div className="text-center py-3 bg-green-50 rounded-lg">
                         <DollarSign className="mx-auto mb-1 text-green-600" size={20} />
                         <p className="text-lg font-bold text-green-900">₹{billStats.totalAmount.toFixed(0)}</p>
-                        <p className="text-xs text-green-600">Total Amount</p>
+                        <p className="text-xs text-green-600 mt-0.5">Total Amount</p>
                     </div>
                 </div>
             )}
 
             {/* Footer */}
-            <div className="flex items-center justify-between pt-3 border-t">
-                <p className="text-xs text-gray-500">
-                    <Calendar size={12} className="inline mr-1" />
-                    Added: {new Date(vendor.created_at).toLocaleDateString()}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Calendar size={12} />
+                    {new Date(vendor.created_at).toLocaleDateString()}
                 </p>
                 <button
                     onClick={() => onViewBills(vendor)}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    className="px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
                 >
                     View Bills
                 </button>
@@ -164,7 +164,6 @@ function VendorFormModal({ vendor, onClose, onSave }) {
 
         try {
             if (vendor) {
-                // Update existing vendor
                 const { error: updateError } = await supabase
                     .from('vendors')
                     .update({
@@ -175,7 +174,6 @@ function VendorFormModal({ vendor, onClose, onSave }) {
 
                 if (updateError) throw updateError;
             } else {
-                // Create new vendor
                 const { error: insertError } = await supabase
                     .from('vendors')
                     .insert({
@@ -196,9 +194,9 @@ function VendorFormModal({ vendor, onClose, onSave }) {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-md w-full">
-                <div className="p-6 border-b">
-                    <h2 className="text-xl font-bold text-gray-800">
+            <div className="bg-white rounded-xl max-w-md w-full shadow-2xl">
+                <div className="p-6 border-b border-gray-200">
+                    <h2 className="text-xl font-bold text-gray-900">
                         {vendor ? 'Edit Vendor' : 'Add New Vendor'}
                     </h2>
                 </div>
@@ -212,28 +210,28 @@ function VendorFormModal({ vendor, onClose, onSave }) {
                     )}
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                             Vendor Name <span className="text-red-500">*</span>
                         </label>
                         <input
                             type="text"
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                             placeholder="Enter vendor name"
                             required
                         />
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                             GSTIN (Optional)
                         </label>
                         <input
                             type="text"
                             value={formData.gstin}
                             onChange={(e) => setFormData({ ...formData, gstin: e.target.value })}
-                            className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                             placeholder="Enter GSTIN"
                         />
                     </div>
@@ -243,14 +241,14 @@ function VendorFormModal({ vendor, onClose, onSave }) {
                             type="button"
                             onClick={onClose}
                             disabled={saving}
-                            className="flex-1 px-4 py-2 border rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                            className="flex-1 px-4 py-2.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="submit"
                             disabled={saving}
-                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 font-medium transition-colors"
                         >
                             {saving ? (
                                 <>
@@ -258,7 +256,7 @@ function VendorFormModal({ vendor, onClose, onSave }) {
                                     Saving...
                                 </>
                             ) : (
-                                vendor ? 'Update' : 'Create'
+                                vendor ? 'Update Vendor' : 'Add Vendor'
                             )}
                         </button>
                     </div>
@@ -330,7 +328,7 @@ export default function VendorPage() {
     };
 
     const handleDelete = async (vendorId) => {
-        if (!confirm('Are you sure you want to delete this vendor? This will also delete all associated bills and bill items.')) {
+        if (!confirm('Are you sure you want to delete this vendor? This will also delete all associated bills.')) {
             return;
         }
 
@@ -363,25 +361,25 @@ export default function VendorPage() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-100 p-4">
+        <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Vendor Management</h1>
+                <div className="mb-8">
+                    <h1 className="text-4xl font-bold text-gray-900 mb-2">Vendor Management</h1>
                     <p className="text-gray-600">Manage your vendors and track their bills</p>
                 </div>
 
                 {/* Error Alert */}
                 {error && (
-                    <Alert variant="error" className="mb-4">
+                    <Alert variant="error" className="mb-6">
                         <AlertCircle className="inline mr-2" size={16} />
                         {error}
                     </Alert>
                 )}
 
-                {/* Search and Add */}
-                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-                    <div className="flex flex-col md:flex-row gap-4">
+                {/* Search and Actions */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6 shadow-sm">
+                    <div className="flex flex-col md:flex-row gap-3">
                         <div className="flex-1 relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                             <input
@@ -389,19 +387,19 @@ export default function VendorPage() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search vendors by name or GSTIN..."
-                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                             />
                         </div>
                         <button
                             onClick={() => router.push('/vendor/scanner')}
-                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center"
+                            className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center font-medium transition-colors"
                         >
                             <ScanLine size={20} />
-                            Register Vendor Bill
+                            Register Bill
                         </button>
                         <button
                             onClick={() => setShowForm(true)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 justify-center"
+                            className="px-5 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 justify-center font-medium transition-colors"
                         >
                             <Plus size={20} />
                             Add Vendor
@@ -409,37 +407,37 @@ export default function VendorPage() {
                     </div>
                 </div>
 
-                {/* Stats Summary */}
+                {/* Summary Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="bg-white rounded-lg shadow-md p-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                                <Building2 className="text-blue-600" size={24} />
+                            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <Building2 className="text-purple-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{vendors.length}</p>
+                                <p className="text-2xl font-bold text-gray-900">{vendors.length}</p>
                                 <p className="text-sm text-gray-600">Total Vendors</p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow-md p-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                                 <FileText className="text-green-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{filteredVendors.length}</p>
+                                <p className="text-2xl font-bold text-gray-900">{filteredVendors.length}</p>
                                 <p className="text-sm text-gray-600">Showing Results</p>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-lg shadow-md p-4">
+                    <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                                <Search className="text-purple-600" size={24} />
+                            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                                <Search className="text-blue-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{searchQuery ? 'Active' : 'None'}</p>
+                                <p className="text-2xl font-bold text-gray-900">{searchQuery ? 'Active' : 'None'}</p>
                                 <p className="text-sm text-gray-600">Search Filter</p>
                             </div>
                         </div>
@@ -448,16 +446,16 @@ export default function VendorPage() {
 
                 {/* Vendors Grid */}
                 {loading ? (
-                    <div className="flex items-center justify-center py-12">
-                        <Loader2 className="animate-spin text-blue-600" size={48} />
+                    <div className="flex items-center justify-center py-16">
+                        <Loader2 className="animate-spin text-purple-600" size={48} />
                     </div>
                 ) : filteredVendors.length === 0 ? (
-                    <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                    <div className="bg-white rounded-xl border border-gray-200 p-12 text-center shadow-sm">
                         <Building2 size={64} className="mx-auto mb-4 text-gray-300" />
-                        <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">
                             {searchQuery ? 'No vendors found' : 'No vendors yet'}
                         </h3>
-                        <p className="text-gray-600 mb-4">
+                        <p className="text-gray-600 mb-6">
                             {searchQuery
                                 ? 'Try adjusting your search query'
                                 : 'Get started by adding your first vendor'}
@@ -465,7 +463,7 @@ export default function VendorPage() {
                         {!searchQuery && (
                             <button
                                 onClick={() => setShowForm(true)}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
+                                className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 inline-flex items-center gap-2 font-medium"
                             >
                                 <Plus size={20} />
                                 Add Your First Vendor
@@ -473,7 +471,7 @@ export default function VendorPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                         {filteredVendors.map((vendor) => (
                             <VendorCard
                                 key={vendor.id}

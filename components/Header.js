@@ -9,9 +9,52 @@ import {
     PackageSearch,
     PersonStanding,
     ChartNoAxesCombined,
-    Camera
+    Camera,
+    LogOut,
+    User
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 // import LanguageSwitcher from './LanguageSwitcher'; // Temporarily disabled until i18n is fully implemented
+
+// User Section Component
+const UserSection = ({ isHovered }) => {
+    const { user, signOut } = useAuth();
+
+    if (!user) return null;
+
+    return (
+        <div className="p-3">
+            <div className="flex items-center gap-3">
+                {/* User Avatar */}
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    {user.user_metadata?.avatar_url ? (
+                        <img
+                            src={user.user_metadata.avatar_url}
+                            alt="User"
+                            className="w-full h-full rounded-full"
+                        />
+                    ) : (
+                        <User className="w-4 h-4 text-white" />
+                    )}
+                </div>
+
+                {/* User Info & Logout */}
+                <div className={`flex-1 overflow-hidden transition-all duration-300 ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0'}`}>
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                        {user.user_metadata?.full_name || user.email}
+                    </p>
+                    <button
+                        onClick={signOut}
+                        className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
+                    >
+                        <LogOut className="w-3 h-3" />
+                        Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Header = ({ params }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -97,6 +140,11 @@ const Header = ({ params }) => {
                             );
                         })}
                     </nav>
+
+                    {/* User Section - Bottom of Sidebar */}
+                    <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200">
+                        <UserSection isHovered={isHovered} />
+                    </div>
                 </div>
             </div>
 

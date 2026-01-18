@@ -1,27 +1,16 @@
-// Temporary passthrough middleware (i18n disabled)
-// When ready to enable i18n, uncomment the code below and remove this passthrough
+import { NextResponse } from 'next/server';
 
-export function middleware(request) {
-    // Just pass through - no locale routing
-    return;
+export async function middleware(req) {
+  // Allow login and auth routes
+  if (req.nextUrl.pathname === '/login' || req.nextUrl.pathname.startsWith('/auth')) {
+    return NextResponse.next();
+  }
+
+  // For now, allow all routes (authentication will be handled client-side)
+  // You can add server-side auth check later after configuring Supabase properly
+  return NextResponse.next();
 }
 
 export const config = {
-    matcher: ['/((?!api|_next|_vercel|.*\\..*).*)']
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };
-
-/*
-// Enable this when ready to implement i18n locale routing:
-
-import createMiddleware from 'next-intl/middleware';
- 
-export default createMiddleware({
-  locales: ['en', 'hi'],
-  defaultLocale: 'en',
-  localePrefix: 'as-needed'
-});
- 
-export const config = {
-  matcher: ['/((?!api|_next|_vercel|.*\\..*).*)']
-};
-*/
