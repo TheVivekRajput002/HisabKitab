@@ -17,11 +17,7 @@ import InvoiceSummary from './InvoiceSummary';
 
 // pdf send
 import { uploadInvoicePDF } from '@/utils/uploadInvoicePDF';
-import { sendInvoiceToWhatsApp } from '@/utils/sendWhatsApp';
-import dynamic from 'next/dynamic';
 import InvoicePDF from './InvoicePDF';
-
-
 
 import { ToastContainer } from './Toast';
 

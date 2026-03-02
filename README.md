@@ -1,68 +1,90 @@
-# HisabKitab - Business Management System
+# HisabKitab - Complete Business Management System
 
-A modern, full-featured business management application built with Next.js for managing customers, invoices, estimates, and inventory.
+A comprehensive, modern business management application built with Next.js for managing all aspects of your business including billing, inventory, customers, vendors, staff, and more.
 
-## ✨ Features
+## 📋 Table of Contents
 
-### Customer Management
-- **Customer Search & Filter** - Advanced search with filtering by name, phone, vehicle
-- **Customer Details View** - Split-panel interface showing customer info and transaction history
-- **Inline Editing** - Edit customer details without leaving the page
-- **Quick Actions** - Direct dial phone numbers, delete customers with confirmation
-- **Add Customers** - Modal form for quick customer creation
-- **Transaction Tracking** - View all invoices with payment status (Paid/Unpaid)
-- **Analytics** - Total purchases, paid amounts, and unpaid balances
+- [Features Overview](#-features-overview)
+- [Quick Start](#-quick-start)
+- [Technology Stack](#️-tech-stack)
+- [Documentation](#-documentation)
+- [Keyboard Shortcuts](#️-keyboard-shortcuts)
+- [License](#-license)
 
-### Billing
-- **Invoice Management** - Create, search, and manage sales invoices
-- **Estimate Management** - Create and manage price quotes
-- **Clean UI** - Simple, professional interface with clear action buttons
-- **Quick Navigation** - Easy access to create new or search existing documents
+## ✨ Features Overview
 
-### Inventory
-- **Product Management** - Add and search products
-- **Stock Tracking** - Keep track of inventory items
-- **Simple Interface** - Clean, focused design for product operations
+### 🏠 Dashboard
+- **Real-time Analytics** - Today's sales statistics and bill count
+- **Interactive Sales Charts** - Visualize sales trends (today/week/month)
+- **Quick Insights** - Total sales, number of parties, and growth trends
+- **Responsive Graphs** - Beautiful charts powered by Recharts
 
-### UI/UX Features
-- **Toast Notifications** - Modern, non-intrusive alerts for success/error messages
-- **Keyboard Shortcuts** - Power user shortcuts for quick navigation and actions
-- **Responsive Design** - Works seamlessly on desktop and mobile devices
-- **Modern Design** - Clean, minimal interface with proper whitespace
-- **Smooth Animations** - Subtle transitions and hover effects
+### 💰 Billing & Invoicing
+- **Invoice Management** - Create, search, edit, and delete sales invoices
+- **Estimate Management** - Generate and manage price quotes
+- **PDF Generation** - Export invoices to PDF format
+- **Invoice Scanner (OCR)** - Scan physical invoices using AI (Google Gemini)
+- **Quick Search** - Find invoices instantly by number, customer, or date
+- **Payment Tracking** - Track cash, online, and unpaid transactions
+- **Keyboard Shortcuts** - Lightning-fast invoice creation (F8)
 
-## ⌨️ Keyboard Shortcuts
+### 👥 Customer Management
+- **Advanced Search** - Filter customers by name, phone, vehicle, or GSTIN
+- **Customer Profiles** - Detailed view with transaction history
+- **Inline Editing** - Quick edit without page navigation
+- **Transaction History** - View all invoices with payment status
+- **Analytics Dashboard** - Total purchases, paid/unpaid amounts
+- **Quick Actions** - Direct dial, delete with confirmation
+- **GSTIN Support** - GST number tracking for tax compliance
 
-| Shortcut | Action |
-|----------|--------|
-| `Esc` | Back / Cancel / Exit current screen |
-| `F8` | Create Sales Invoice |
-| `Ctrl + A` | Save |
-| `Alt + C` | Create customer/item inline |
-| `Alt + D` | Delete invoice |
-| `Alt + 2` | Duplicate invoice |
-| `F12` | Invoice settings |
-| `Alt + F2` | Change invoice date |
-| `Ctrl + P` | Print / PDF |
+### 📦 Inventory Management
+- **Product Catalog** - Comprehensive product database
+- **Stock Tracking** - Monitor inventory levels
+- **HSN Code Support** - HSN/SAC codes for GST compliance
+- **Product Search** - Quick product lookup
+- **SKU Management** - Unique product identification
+- **Pricing Management** - Purchase and sale rate tracking
+- **QR Code Generation** - Generate QR codes for products
 
-Click the keyboard icon (bottom-right) to view shortcuts anytime.
+### 🏢 Vendor Management  
+- **Vendor Database** - Manage supplier information
+- **Bill Tracking** - Track vendor bills and purchases
+- **OCR Scanner** - Scan vendor invoices automatically
+- **Payment History** - Monitor vendor payments
+- **Product Association** - Link products to vendors
 
-## 🛠️ Tech Stack
+### 👨‍💼 Staff Management
+- **Employee Records** - Comprehensive staff database
+- **Salary Management** - Track employee salaries
+- **Salary Slips** - Generate and manage salary slips
+- **Staff Analytics** - Monitor staff-related expenses
 
-- **Framework**: [Next.js 14](https://nextjs.org/) (App Router)
-- **Language**: JavaScript/React
-- **Database**: [Supabase](https://supabase.com/) (PostgreSQL)
-- **Styling**: Tailwind CSS
-- **Icons**: [Lucide React](https://lucide.dev/)
-- **UI Components**: Custom components with modern design patterns
+### 📊 Reports & Analytics
+- **Sales Reports** - Comprehensive sales analysis
+- **Custom Reports** - Generate reports for specific periods
+- **Data Visualization** - Charts and graphs for insights
 
-## 📦 Installation
+### 🌐 Multi-language Support
+- **English & Hindi** - Full internationalization (i18n)
+- **Language Switcher** - Easy toggle between languages
+- **next-intl Integration** - Professional translation management
+
+### 🎨 UI/UX Features
+- **Modern Design** - Clean, professional interface
+- **Toast Notifications** - Non-intrusive success/error alerts
+- **Responsive Layout** - Works perfectly on all devices
+- **Smooth Animations** - Polished user experience
+- **Dark Mode Ready** - Interface optimized for readability
+- **Keyboard Shortcuts** - Power user productivity features
+
+## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+ and npm/yarn
 - Supabase account and project
+- Google Gemini API key (for OCR features)
 
-### Setup Steps
+### Installation
 
 1. **Clone the repository**
    ```bash
@@ -73,133 +95,168 @@ Click the keyboard icon (bottom-right) to view shortcuts anytime.
 2. **Install dependencies**
    ```bash
    npm install
-   # or
-   yarn install
    ```
 
 3. **Configure environment variables**
    
-   Create a `.env.local` file in the root directory:
+   Create a `.env.local` file:
    ```env
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   GEMINI_API_KEY=your_gemini_api_key
    ```
 
 4. **Set up Supabase database**
    
-   Create the following tables in your Supabase project:
-   
-   - `customers` - Stores customer information
-   - `invoices` - Stores invoice data
-   - `products` - Stores inventory items
+   Required tables:
+   - `customers` - Customer information
+   - `invoices` - Invoice/estimate data
+   - `products` - Inventory items
+   - `vendors` - Vendor information
+   - `staff` - Employee records
 
-5. **Run the development server**
+5. **Run development server**
    ```bash
    npm run dev
-   # or
-   yarn dev
    ```
 
-6. **Open the application**
+6. **Open application**
    
    Navigate to [http://localhost:3000](http://localhost:3000)
+
+## 🛠️ Tech Stack
+
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router)
+- **Language**: JavaScript/React 19
+- **Database**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/)
+- **Icons**: [Lucide React](https://lucide.dev/)
+- **Charts**: [Recharts](https://recharts.org/)
+- **PDF Generation**: jsPDF, @react-pdf/renderer
+- **OCR/AI**: Google Gemini AI (@google/genai)
+- **i18n**: next-intl
+- **QR Codes**: qrcode
+- **Image Processing**: react-image-crop
+
+## 📚 Documentation
+
+For detailed information about each feature, see [FEATURES.md](./FEATURES.md)
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Esc` | Back / Cancel / Exit |
+| `F8` | Create Sales Invoice |
+| `Ctrl + A` | Save |
+| `Ctrl + S` | Save (Invoice/Estimate Add) |
+| `Alt + C` | Create customer/item inline |
+| `Alt + D` | Delete invoice |
+| `Alt + 2` | Duplicate invoice |
+| `F12` | Invoice settings |
+| `Alt + F2` | Change invoice date |
+| `Ctrl + P` | Print / PDF |
+
+Click the keyboard icon (⌨️) in the bottom-right corner to view shortcuts anytime.
 
 ## 📁 Project Structure
 
 ```
 HisabKitab/
 ├── app/
-│   ├── billing/          # Billing pages (invoices, estimates)
-│   ├── customer/         # Customer management pages
-│   ├── customer1/        # Enhanced customer view with split panel
-│   ├── inventory/        # Inventory management pages
-│   ├── layout.js         # Root layout with header and shortcuts
-│   └── globals.css       # Global styles
+│   ├── page.js              # Dashboard with analytics
+│   ├── billing/             # Invoice & estimate management
+│   │   ├── add/            # Create new invoice/estimate
+│   │   ├── invoice/        # Invoice search & management
+│   │   └── estimate/       # Estimate search & management
+│   ├── customer/           # Customer management
+│   │   ├── add/           # Add new customer
+│   │   ├── search/        # Customer search
+│   │   └── [id]/          # Customer details & transactions
+│   ├── inventory/          # Product management
+│   │   ├── add/           # Add new product
+│   │   ├── search/        # Product search
+│   │   └── scanner/       # OCR product scanner
+│   ├── vendor/            # Vendor management
+│   │   ├── scanner/       # Vendor invoice OCR
+│   │   └── [vendorId]/    # Vendor bills & details
+│   ├── staff/             # Employee management
+│   │   └── salary-slip/   # Salary slip generation
+│   └── report/            # Reports & analytics
 ├── components/
-│   ├── Header.js         # Navigation header
-│   └── KeyboardShortcutsHelp.js  # Shortcuts help modal
+│   ├── Header.js                    # Navigation header
+│   ├── KeyboardShortcutsHelp.js    # Shortcuts modal
+│   └── LanguageSwitcher.js         # Language toggle
 ├── hooks/
-│   └── useKeyboardShortcuts.js   # Custom keyboard shortcuts hook
+│   └── useKeyboardShortcuts.js     # Keyboard shortcuts hook
 ├── utils/
-│   └── supabaseClient.js # Supabase configuration
-└── public/               # Static assets
+│   └── supabaseClient.js           # Database configuration
+├── messages/                        # i18n translations
+│   ├── en.json                     # English translations
+│   └── hi.json                     # Hindi translations
+└── public/                          # Static assets
 ```
 
-## 🚀 Usage
+## 🎯 Core Features Breakdown
 
-### Customer Management
+### 1. Dashboard (`/`)
+- Real-time business metrics
+- Sales visualization charts
+- Quick statistics (today/week/month views)
 
-1. **View Customers**: Navigate to `/customer1`
-   - Left panel: Search and filter customers
-   - Right panel: View selected customer details and transactions
+### 2. Billing (`/billing`)
+- Invoice creation and management
+- Estimate/quotation system
+- OCR invoice scanning
+- PDF export
 
-2. **Add Customer**: Click "Add Customer" button
-   - Fill in name, phone (required)
-   - Optionally add vehicle and address
-   - Click "Add Customer" to save
+### 3. Customers (`/customer`)
+- Comprehensive customer database
+- Transaction history tracking
+- Payment status monitoring
+- GSTIN/GST compliance
 
-3. **Edit Customer**: Click edit icon next to customer name
-   - Modify details inline
-   - Click "Save Changes" or "Cancel"
+### 4. Inventory (`/inventory`)
+- Product catalog management
+- Stock tracking
+- HSN code support
+- QR code generation
 
-4. **Delete Customer**: Click trash icon
-   - Confirmation dialog appears
-   - All customer invoices will be deleted
+### 5. Vendors (`/vendor`)
+- Supplier management
+- Purchase tracking
+- Vendor bill scanning (OCR)
 
-### Billing
+### 6. Staff (`/staff`)
+- Employee records
+- Salary management
+- Salary slip generation
 
-1. **Create Invoice**: Navigate to `/billing` → Click "New Invoice"
-2. **Search Invoices**: Click "Search Invoice" to find existing invoices
-3. **Create Estimate**: Click "New Estimate" for price quotes
-4. **Search Estimates**: Click "Search Estimate" to find existing quotes
+### 7. Reports (`/report`)
+- Business analytics
+- Custom reports
 
-### Inventory
+## 🔒 Database Schema
 
-1. **Add Product**: Navigate to `/inventory` → Click "Add Product"
-2. **Search Products**: Click "Search Products" to find inventory items
+See [FEATURES.md](./FEATURES.md) for complete database schema and setup instructions.
 
-## 🎨 Design Philosophy
+## 🌟 Key Highlights
 
-- **Simplicity First**: Clean, uncluttered interface
-- **Minimal Colors**: Strategic use of blue, orange, and green accents
-- **Proper Whitespace**: Breathing room for better readability
-- **Smooth Interactions**: Subtle animations without distractions
-- **Mobile Responsive**: Works great on all screen sizes
-
-## 🔧 Configuration
-
-### Database Schema
-
-#### Customers Table
-```sql
-- id (uuid, primary key)
-- name (text, required)
-- phone_number (text, required)
-- vehicle (text, optional)
-- address (text, optional)
-- created_at (timestamp)
-```
-
-#### Invoices Table
-```sql
-- id (uuid, primary key)
-- customer_id (uuid, foreign key)
-- invoice_number (text)
-- bill_date (date)
-- total_amount (numeric)
-- mode_of_payment (text: 'cash' | 'online' | 'unpaid')
-- created_at (timestamp)
-```
-
-## 📝 License
-
-This project is private and proprietary.
+- ✅ **Complete Business Solution** - Everything you need in one app
+- ✅ **AI-Powered OCR** - Automatic invoice scanning with Google Gemini
+- ✅ **Multi-language** - English & Hindi support
+- ✅ **Mobile Responsive** - Works on all devices
+- ✅ **Keyboard-first** - Productivity shortcuts for power users
+- ✅ **Modern UI** - Clean, professional design
+- ✅ **Real-time Data** - Instant updates and synchronization
+- ✅ **PDF Export** - Professional invoice generation
+- ✅ **QR Codes** - Product identification system
 
 ## 👨‍💻 Development
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start development server (http://localhost:3000)
 - `npm run build` - Build for production
 - `npm start` - Start production server
 - `npm run lint` - Run ESLint
@@ -208,6 +265,12 @@ This project is private and proprietary.
 
 Please follow the existing code style and patterns when contributing.
 
+## 📝 License
+
+This project is private and proprietary.
+
 ---
 
-Built with ❤️ using Next.js and Supabase
+**Built with ❤️ using Next.js and Supabase**
+
+For detailed feature documentation, see [FEATURES.md](./FEATURES.md)
