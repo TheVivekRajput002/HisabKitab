@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, FileText, Calendar, DollarSign, AlertCircle, Loader2, Package, ChevronDown, ChevronUp, Download, Eye } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, DollarSign, AlertCircle, Loader2, Package, ChevronDown, ChevronUp, Download, Eye, CreditCard } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 // ============================================================================
@@ -38,6 +38,9 @@ function Badge({ children, variant = 'default', className = '' }) {
 // ============================================================================
 
 function BillCard({ bill, onViewDetails }) {
+    const params = useParams();
+    const router = useRouter();
+    const vendorId = params.vendorId || params.id;
     const [expanded, setExpanded] = useState(false);
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -121,9 +124,9 @@ function BillCard({ bill, onViewDetails }) {
                     )}
                 </div>
 
-                {/* View Photo Button */}
-                {bill.photo_url && (
-                    <div className="mt-3">
+                {/* Action Buttons */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {bill.photo_url && (
                         <button
                             onClick={() => {
                                 const { data } = supabase.storage
@@ -136,8 +139,31 @@ function BillCard({ bill, onViewDetails }) {
                             <Eye size={16} />
                             View Invoice Photo
                         </button>
-                    </div>
-                )}
+                    )}
+
+                    {bill.payment_status !== 'paid' && (
+                        <button
+                            onClick={() => router.push(`/vendor/${vendorId}/pay?billId=${bill.id}`)}
+                            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-sm"
+                        >
+                            <CreditCard size={16} />
+                            Pay Now
+                        </button>
+                    )}
+
+                    {bill.payment_status === 'paid' && (
+                        <button
+                            onClick={() => {
+                                const paymentId = bill.payments?.[0]?.id || bill.payment_id;
+                                router.push(paymentId ? `/vendor/${vendorId}/payments/${paymentId}` : `/vendor/${vendorId}/payments`);
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm"
+                        >
+                            <Eye size={16} />
+                            View Payment
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* Bill Items Toggle */}
@@ -284,7 +310,7 @@ export default function VendorBillsPage() {
             // Fetch bills
             const { data: billsData, error: billsError } = await supabase
                 .from('vendor_bills')
-                .select('*')
+                .select('*, payments(id)')
                 .eq('vendor_id', vendorId)
                 .order('bill_date', { ascending: false });
 

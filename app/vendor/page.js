@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Building2, Plus, Edit2, Trash2, FileText, Calendar, DollarSign, AlertCircle, Loader2, ScanLine } from 'lucide-react';
+import { Search, Building2, Plus, Edit2, Trash2, FileText, Calendar, DollarSign, AlertCircle, Loader2, ScanLine, CreditCard } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 // ============================================================================
@@ -34,7 +34,7 @@ function Badge({ children, variant = 'default', className = '' }) {
 // VENDOR CARD COMPONENT
 // ============================================================================
 
-function VendorCard({ vendor, onEdit, onDelete, onViewBills }) {
+function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
     const [billStats, setBillStats] = useState({ total: 0, unpaid: 0, totalAmount: 0 });
     const [loading, setLoading] = useState(true);
 
@@ -127,14 +127,22 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills }) {
             <div className="flex items-center justify-between pt-3 border-t">
                 <p className="text-xs text-gray-500">
                     <Calendar size={12} className="inline mr-1" />
-                    Added: {new Date(vendor.created_at).toLocaleDateString()}
+                    Added: {new Date(vendor.created_at).toLocaleDateString('en-GB')}
                 </p>
-                <button
-                    onClick={() => onViewBills(vendor)}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                    View Bills
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => onViewPayments(vendor)}
+                        className="px-3 py-1.5 bg-green-50 text-green-700 text-sm rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1 border border-green-200"
+                    >
+                        <CreditCard size={14} /> View Payments
+                    </button>
+                    <button
+                        onClick={() => onViewBills(vendor)}
+                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        View Bills
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -362,6 +370,10 @@ export default function VendorPage() {
         router.push(`/vendor/${vendor.id}/bills`);
     };
 
+    const handleViewPayments = (vendor) => {
+        router.push(`/vendor/${vendor.id}/payments`);
+    };
+
     return (
         <div className="min-h-screen bg-gray-100 p-4">
             <div className="max-w-7xl mx-auto">
@@ -406,6 +418,7 @@ export default function VendorPage() {
                             <Plus size={20} />
                             Add Vendor
                         </button>
+
                     </div>
                 </div>
 
@@ -481,6 +494,7 @@ export default function VendorPage() {
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
                                 onViewBills={handleViewBills}
+                                onViewPayments={handleViewPayments}
                             />
                         ))}
                     </div>
