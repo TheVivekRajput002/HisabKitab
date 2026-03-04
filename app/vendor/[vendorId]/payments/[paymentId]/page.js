@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Clock, Calendar, Search, Edit2, AlertCircle, Loader2, CreditCard, Building, Building2, Ticket, DollarSign, FileText, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, Search, Edit2, AlertCircle, Loader2, CreditCard, Building, Building2, Ticket, DollarSign, FileText, CheckCircle2, Eye } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
 function Badge({ children, variant = 'default', className = '' }) {
@@ -208,6 +208,22 @@ export default function VendorPaymentDetailsPage() {
                                                     {payment.details.cheque_date ? new Date(payment.details.cheque_date).toLocaleDateString('en-GB') : 'N/A'}
                                                 </span>
                                             </div>
+                                            {payment.details.cheque_photo_url && (
+                                                <div className="pt-3 mt-2 border-t border-gray-200">
+                                                    <button
+                                                        onClick={() => {
+                                                            const { data } = supabase.storage
+                                                                .from('cheque-photos')
+                                                                .getPublicUrl(payment.details.cheque_photo_url);
+                                                            window.open(data.publicUrl, '_blank');
+                                                        }}
+                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm"
+                                                    >
+                                                        <Eye size={16} />
+                                                        View Cheque Image
+                                                    </button>
+                                                </div>
+                                            )}
                                         </>
                                     )}
 

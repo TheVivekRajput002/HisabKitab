@@ -1,9 +1,367 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine, Pen, Undo2, Trash2, Minus, Plus, Crop, RotateCcw, Check } from 'lucide-react';
+import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/utils/supabaseClient';
+
+// Lazy load ReactCrop
+const ReactCrop = dynamic(() => import('react-image-crop'), {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" size={32} /></div>
+});
+
+// ============================================================================
+// IMAGE MARKER / ANNOTATION COMPONENT
+// ============================================================================
+
+function ImageMarker({ imageSrc, onDone, onCancel }) {
+    const canvasRef = useRef(null);
+    const imgRef = useRef(null);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [brushSize, setBrushSize] = useState(3);
+    const [brushColor, setBrushColor] = useState('#FF0000');
+    const [strokes, setStrokes] = useState([]); // Array of stroke arrays for undo
+    const [currentStroke, setCurrentStroke] = useState([]);
+    const [canvasReady, setCanvasReady] = useState(false);
+
+    const colors = [
+        { color: '#FF0000', label: 'Red' },
+        { color: '#00CC00', label: 'Green' },
+        { color: '#0066FF', label: 'Blue' },
+        { color: '#FF9900', label: 'Orange' },
+        { color: '#000000', label: 'Black' },
+    ];
+
+    // Initialize canvas when image loads
+    const handleImageLoad = useCallback(() => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) return;
+
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        setCanvasReady(true);
+        redrawAll([]);
+    }, []);
+
+    // Redraw all strokes on the canvas
+    const redrawAll = useCallback((allStrokes) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        allStrokes.forEach((stroke) => {
+            if (stroke.points.length < 2) return;
+            ctx.beginPath();
+            ctx.strokeStyle = stroke.color;
+            ctx.lineWidth = stroke.size;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++) {
+                ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            }
+            ctx.stroke();
+        });
+    }, []);
+
+    // Get coordinates relative to the canvas (accounting for display scaling)
+    const getCoords = useCallback((e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return { x: 0, y: 0 };
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        let clientX, clientY;
+        if (e.touches) {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+        };
+    }, []);
+
+    const startDrawing = useCallback((e) => {
+        e.preventDefault();
+        const coords = getCoords(e);
+        setIsDrawing(true);
+        setCurrentStroke([coords]);
+    }, [getCoords]);
+
+    const draw = useCallback((e) => {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const coords = getCoords(e);
+        setCurrentStroke(prev => {
+            const updated = [...prev, coords];
+
+            // Draw live stroke
+            const canvas = canvasRef.current;
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                redrawAll(strokes);
+                if (updated.length >= 2) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = brushColor;
+                    ctx.lineWidth = brushSize;
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.moveTo(updated[0].x, updated[0].y);
+                    for (let i = 1; i < updated.length; i++) {
+                        ctx.lineTo(updated[i].x, updated[i].y);
+                    }
+                    ctx.stroke();
+                }
+            }
+            return updated;
+        });
+    }, [isDrawing, getCoords, brushColor, brushSize, strokes, redrawAll]);
+
+    const stopDrawing = useCallback(() => {
+        if (!isDrawing) return;
+        setIsDrawing(false);
+        if (currentStroke.length >= 2) {
+            const newStroke = { points: currentStroke, color: brushColor, size: brushSize };
+            const newStrokes = [...strokes, newStroke];
+            setStrokes(newStrokes);
+            redrawAll(newStrokes);
+        }
+        setCurrentStroke([]);
+    }, [isDrawing, currentStroke, brushColor, brushSize, strokes, redrawAll]);
+
+    const handleUndo = () => {
+        const newStrokes = strokes.slice(0, -1);
+        setStrokes(newStrokes);
+        redrawAll(newStrokes);
+    };
+
+    const handleClear = () => {
+        setStrokes([]);
+        redrawAll([]);
+    };
+
+    // Composite image + annotations and return as File
+    const handleDone = async () => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) { onCancel(); return; }
+
+        // Create a composite canvas
+        const compositeCanvas = document.createElement('canvas');
+        compositeCanvas.width = img.naturalWidth;
+        compositeCanvas.height = img.naturalHeight;
+        const ctx = compositeCanvas.getContext('2d');
+
+        // Draw the original image
+        ctx.drawImage(img, 0, 0);
+
+        // Draw the annotations on top
+        ctx.drawImage(canvas, 0, 0);
+
+        // Export as blob/file
+        compositeCanvas.toBlob((blob) => {
+            if (blob) {
+                const file = new File([blob], 'annotated-check.jpg', { type: 'image/jpeg' });
+                onDone(file);
+            } else {
+                onCancel();
+            }
+        }, 'image/jpeg', 0.95);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[95vh] overflow-hidden flex flex-col">
+                {/* Header */}
+                <div className="p-3 border-b bg-gradient-to-r from-orange-50 to-red-50 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Pen className="text-red-600" size={20} />
+                        <h2 className="text-base font-bold text-gray-800">Mark on Check</h2>
+                    </div>
+                    <span className="text-xs text-gray-500">Draw to highlight important areas</span>
+                </div>
+
+                {/* Toolbar */}
+                <div className="p-2 border-b bg-gray-50 flex items-center gap-3 flex-wrap">
+                    {/* Color Picker */}
+                    <div className="flex items-center gap-1.5">
+                        {colors.map((c) => (
+                            <button
+                                key={c.color}
+                                onClick={() => setBrushColor(c.color)}
+                                className={`w-6 h-6 rounded-full border-2 transition-all ${brushColor === c.color ? 'border-gray-800 scale-110 shadow-md' : 'border-gray-300'}`}
+                                style={{ backgroundColor: c.color }}
+                                title={c.label}
+                            />
+                        ))}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-px h-6 bg-gray-300" />
+
+                    {/* Brush Size */}
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setBrushSize(Math.max(1, brushSize - 1))}
+                            className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            title="Smaller brush"
+                        >
+                            <Minus size={14} />
+                        </button>
+                        <span className="text-xs font-mono w-6 text-center text-gray-600">{brushSize}</span>
+                        <button
+                            onClick={() => setBrushSize(Math.min(20, brushSize + 1))}
+                            className="p-1 hover:bg-gray-200 rounded transition-colors"
+                            title="Larger brush"
+                        >
+                            <Plus size={14} />
+                        </button>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-px h-6 bg-gray-300" />
+
+                    {/* Undo & Clear */}
+                    <button
+                        onClick={handleUndo}
+                        disabled={strokes.length === 0}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded hover:bg-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Undo last stroke"
+                    >
+                        <Undo2 size={14} /> Undo
+                    </button>
+                    <button
+                        onClick={handleClear}
+                        disabled={strokes.length === 0}
+                        className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded hover:bg-red-100 text-red-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        title="Clear all drawings"
+                    >
+                        <Trash2 size={14} /> Clear
+                    </button>
+                </div>
+
+                {/* Canvas Area */}
+                <div className="flex-1 overflow-auto p-3 bg-gray-100 flex items-center justify-center">
+                    <div className="relative inline-block" style={{ touchAction: 'none' }}>
+                        <img
+                            ref={imgRef}
+                            src={imageSrc}
+                            alt="Check to annotate"
+                            onLoad={handleImageLoad}
+                            className="max-w-full max-h-[55vh] rounded-lg"
+                            style={{ display: 'block' }}
+                        />
+                        <canvas
+                            ref={canvasRef}
+                            className="absolute top-0 left-0 w-full h-full rounded-lg"
+                            style={{ cursor: 'crosshair' }}
+                            onMouseDown={startDrawing}
+                            onMouseMove={draw}
+                            onMouseUp={stopDrawing}
+                            onMouseLeave={stopDrawing}
+                            onTouchStart={startDrawing}
+                            onTouchMove={draw}
+                            onTouchEnd={stopDrawing}
+                        />
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-3 border-t bg-gray-50 flex gap-3">
+                    <button
+                        onClick={onCancel}
+                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors text-gray-700 font-medium"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={handleDone}
+                        className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                        <CheckCircle2 size={18} />
+                        Apply Marks
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ============================================================================
+// IMAGE CROPPER
+// ============================================================================
+
+function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
+    const [crop, setCrop] = useState({ unit: '%', width: 90, height: 90, x: 5, y: 5 });
+    const [completedCrop, setCompletedCrop] = useState(null);
+    const imgRef = useRef(null);
+
+    const getCroppedImage = (image, cropData, fileName) => new Promise((resolve, reject) => {
+        const canvas = document.createElement('canvas');
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+        canvas.width = cropData.width * scaleX;
+        canvas.height = cropData.height * scaleY;
+        canvas.getContext('2d').drawImage(
+            image,
+            cropData.x * scaleX, cropData.y * scaleY,
+            cropData.width * scaleX, cropData.height * scaleY,
+            0, 0, cropData.width * scaleX, cropData.height * scaleY
+        );
+        canvas.toBlob(
+            (blob) => blob ? resolve(new File([blob], fileName, { type: 'image/jpeg' })) : reject(new Error('Canvas is empty')),
+            'image/jpeg', 0.95
+        );
+    });
+
+    const handleCropComplete = async () => {
+        if (!completedCrop || !imgRef.current) { onCancel(); return; }
+        try {
+            const croppedFile = await getCroppedImage(imgRef.current, completedCrop, 'cropped-check.jpg');
+            onCropComplete(croppedFile);
+        } catch { onCancel(); }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center p-4 z-[60]">
+            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] overflow-hidden flex flex-col">
+                <div className="p-3 border-b flex items-center justify-between bg-gradient-to-r from-blue-50 to-cyan-50">
+                    <div className="flex items-center gap-2">
+                        <Crop className="text-blue-600" size={20} />
+                        <h2 className="text-base font-bold text-gray-800">Crop Check Image</h2>
+                    </div>
+                </div>
+                <div className="flex-1 overflow-auto p-4 bg-gray-100 flex items-center justify-center">
+                    <ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)} className="max-h-[70vh]">
+                        <img ref={imgRef} src={imageSrc} alt="Crop preview" style={{ maxHeight: '70vh', maxWidth: '100%' }} onLoad={(e) => {
+                            const { width, height } = e.currentTarget;
+                            setCrop({ unit: 'px', width: width * 0.9, height: height * 0.9, x: width * 0.05, y: height * 0.05 });
+                        }} />
+                    </ReactCrop>
+                </div>
+                <div className="p-3 border-t flex gap-3 bg-gray-50">
+                    <button onClick={onCancel} className="flex-1 px-4 py-2.5 border rounded-lg hover:bg-gray-100 flex items-center justify-center gap-2 text-gray-700 font-medium">
+                        <RotateCcw size={18} /> Cancel
+                    </button>
+                    <button onClick={handleCropComplete} className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2 font-medium">
+                        <Check size={18} /> Apply Crop
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 // ============================================================================
 // CHECK SCANNER MODAL
@@ -14,6 +372,8 @@ function CheckScannerModal({ onExtracted, onClose }) {
     const [imagePreview, setImagePreview] = useState(null);
     const [scanning, setScanning] = useState(false);
     const [error, setError] = useState(null);
+    const [showMarker, setShowMarker] = useState(false);
+    const [showCropper, setShowCropper] = useState(false);
     const fileInputRef = useRef(null);
     const cameraInputRef = useRef(null);
 
@@ -39,6 +399,22 @@ function CheckScannerModal({ onExtracted, onClose }) {
         const reader = new FileReader();
         reader.onload = (ev) => setImagePreview(ev.target.result);
         reader.readAsDataURL(file);
+    };
+
+    const handleMarkerDone = (annotatedFile) => {
+        setImageFile(annotatedFile);
+        const reader = new FileReader();
+        reader.onload = (ev) => setImagePreview(ev.target.result);
+        reader.readAsDataURL(annotatedFile);
+        setShowMarker(false);
+    };
+
+    const handleCropDone = (croppedFile) => {
+        setImageFile(croppedFile);
+        const reader = new FileReader();
+        reader.onload = (ev) => setImagePreview(ev.target.result);
+        reader.readAsDataURL(croppedFile);
+        setShowCropper(false);
     };
 
     const handleScan = async () => {
@@ -82,7 +458,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
             jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
 
             const data = JSON.parse(jsonStr);
-            onExtracted(data);
+            onExtracted(data, imageFile);
             onClose();
         } catch (err) {
             console.error('Check scan error:', err);
@@ -176,13 +552,32 @@ function CheckScannerModal({ onExtracted, onClose }) {
                                     className="w-full max-h-64 object-contain bg-gray-50"
                                 />
                                 {!scanning && (
-                                    <button
-                                        onClick={handleReset}
-                                        className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
-                                        title="Remove image"
-                                    >
-                                        <X size={16} />
-                                    </button>
+                                    <div className="absolute top-2 right-2 flex gap-2">
+                                        {/* Crop button */}
+                                        <button
+                                            onClick={() => setShowCropper(true)}
+                                            className="p-1.5 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-lg"
+                                            title="Crop image"
+                                        >
+                                            <Crop size={16} />
+                                        </button>
+                                        {/* Marker button */}
+                                        <button
+                                            onClick={() => setShowMarker(true)}
+                                            className="p-1.5 bg-orange-500 text-white rounded-full hover:bg-orange-600 shadow-lg"
+                                            title="Draw on image"
+                                        >
+                                            <Pen size={16} />
+                                        </button>
+                                        {/* Remove button */}
+                                        <button
+                                            onClick={handleReset}
+                                            className="p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 shadow-lg"
+                                            title="Remove image"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -207,6 +602,20 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             Re-upload
                         </button>
                         <button
+                            onClick={() => setShowCropper(true)}
+                            className="px-4 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors font-medium flex items-center justify-center gap-2"
+                        >
+                            <Crop size={16} />
+                            Crop
+                        </button>
+                        <button
+                            onClick={() => setShowMarker(true)}
+                            className="px-4 py-2.5 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium flex items-center justify-center gap-2"
+                        >
+                            <Pen size={16} />
+                            Mark
+                        </button>
+                        <button
                             onClick={handleScan}
                             className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center justify-center gap-2"
                         >
@@ -216,6 +625,24 @@ function CheckScannerModal({ onExtracted, onClose }) {
                     </div>
                 )}
             </div>
+
+            {/* Cropper Overlay */}
+            {showCropper && imagePreview && (
+                <ImageCropper
+                    imageSrc={imagePreview}
+                    onCropComplete={handleCropDone}
+                    onCancel={() => setShowCropper(false)}
+                />
+            )}
+
+            {/* Marker Overlay */}
+            {showMarker && imagePreview && (
+                <ImageMarker
+                    imageSrc={imagePreview}
+                    onDone={handleMarkerDone}
+                    onCancel={() => setShowMarker(false)}
+                />
+            )}
         </div>
     );
 }
@@ -241,6 +668,7 @@ export default function VendorPayPage() {
     const [success, setSuccess] = useState(false);
     const [showScanner, setShowScanner] = useState(false);
     const [scanFilled, setScanFilled] = useState(false);
+    const [chequeImageFile, setChequeImageFile] = useState(null);
 
     const [formData, setFormData] = useState({
         payment_method: 'CHEQUE',
@@ -312,7 +740,7 @@ export default function VendorPayPage() {
     };
 
     // Handle extracted check data from the scanner modal
-    const handleCheckExtracted = (data) => {
+    const handleCheckExtracted = (data, imageFile) => {
         setFormData(prev => ({
             ...prev,
             amount: data.amount || prev.amount,
@@ -322,8 +750,9 @@ export default function VendorPayPage() {
             payment_date: data.cheque_date || prev.payment_date,
             notes: data.notes || prev.notes
         }));
+        // Store the cheque image file for upload on submit
+        if (imageFile) setChequeImageFile(imageFile);
         setScanFilled(true);
-        // Auto-dismiss the success badge after 5 seconds
         setTimeout(() => setScanFilled(false), 5000);
     };
 
@@ -403,6 +832,31 @@ export default function VendorPayPage() {
                     .eq('id', billId);
 
                 if (updateError) throw updateError;
+            }
+
+            // 4. Upload cheque image if available
+            if (chequeImageFile && formData.payment_method === 'CHEQUE') {
+                try {
+                    const fileExt = chequeImageFile.name.split('.').pop();
+                    const fileName = `cheque_${vendorId}_${paymentId}_${Date.now()}.${fileExt}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('cheque-photos')
+                        .upload(fileName, chequeImageFile);
+
+                    if (uploadError) {
+                        console.error('Cheque image upload error:', uploadError);
+                    } else {
+                        // Update payment_details with the cheque photo URL
+                        await supabase
+                            .from('payment_details')
+                            .update({ cheque_photo_url: fileName })
+                            .eq('payment_id', paymentId);
+                    }
+                } catch (uploadErr) {
+                    console.error('Cheque image upload failed:', uploadErr);
+                    // Don't fail the payment if upload fails
+                }
             }
 
             setSuccess(true);
