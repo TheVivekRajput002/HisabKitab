@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Clock, Calendar, CheckCircle, Search, Edit2, AlertCircle, Loader2, CreditCard, Building, Building2, Ticket, DollarSign, FileText, ChevronRight } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 
@@ -28,10 +28,13 @@ const MethodIcon = ({ method, size = 16, className = "" }) => {
 export default function VendorPaymentsPage() {
     const router = useRouter();
     const params = useParams();
+    const searchParams = useSearchParams();
     const vendorId = params.vendorId || params.id;
+    const billId = searchParams.get('billId');
 
     const [loading, setLoading] = useState(true);
     const [vendor, setVendor] = useState(null);
+    const [bill, setBill] = useState(null);
     const [payments, setPayments] = useState([]);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState({ total: 0, amount: 0 });
@@ -40,7 +43,7 @@ export default function VendorPaymentsPage() {
         if (vendorId) {
             fetchVendorAndPayments();
         }
-    }, [vendorId]);
+    }, [vendorId, billId]);
 
     const fetchVendorAndPayments = async () => {
         try {
@@ -56,21 +59,40 @@ export default function VendorPaymentsPage() {
             if (vendorError) throw vendorError;
             setVendor(vendorData);
 
-            // Fetch Payments
-            const { data: paymentsData, error: paymentsError } = await supabase
+            // Fetch bill info if billId is present
+            if (billId) {
+                const { data: billData } = await supabase
+                    .from('vendor_bills')
+                    .select('id, bill_number, total_amount, payment_status')
+                    .eq('id', billId)
+                    .single();
+                if (billData) setBill(billData);
+            }
+
+            // Fetch Payments — filtered by bill if billId present
+            let query = supabase
                 .from('payments')
                 .select(`
                     id, 
                     payment_number, 
                     amount, 
+                    remaining_amount,
                     payment_method, 
                     payment_date, 
                     status,
                     created_at,
-                    payment_details (*)
+                    vendor_bill_id,
+                    payment_details (*),
+                    vendor_bills (bill_number)
                 `)
-                .eq('customer_id', vendorId) // In your mapped schema, customer_id holds vendor_id
+                .eq('customer_id', vendorId)
                 .order('created_at', { ascending: false });
+
+            if (billId) {
+                query = query.eq('vendor_bill_id', billId);
+            }
+
+            const { data: paymentsData, error: paymentsError } = await query;
 
             if (paymentsError) throw paymentsError;
             setPayments(paymentsData || []);
@@ -120,14 +142,14 @@ export default function VendorPaymentsPage() {
             <div className="max-w-5xl mx-auto">
                 <div className="mb-6 flex justify-between items-center">
                     <button
-                        onClick={() => router.push('/vendor')}
+                        onClick={() => router.push(billId ? `/vendor/${vendorId}/bills` : '/vendor')}
                         className="px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 shadow-sm"
                     >
                         <ArrowLeft size={18} />
-                        Back to Vendors
+                        {billId ? 'Back to Bills' : 'Back to Vendors'}
                     </button>
                     <button
-                        onClick={() => router.push(`/vendor/${vendorId}/pay`)}
+                        onClick={() => router.push(`/vendor/${vendorId}/pay${billId ? `?billId=${billId}` : ''}`)}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 shadow-sm font-medium"
                     >
                         <CreditCard size={18} />
@@ -145,11 +167,25 @@ export default function VendorPaymentsPage() {
                             <h1 className="text-2xl font-bold text-gray-800">{vendor.name}</h1>
                             <div className="text-sm text-gray-500 mt-1 flex items-center gap-2">
                                 <span>Vendors /</span>
-                                <span className="font-medium text-blue-600">Payment History</span>
+                                {bill ? (
+                                    <>
+                                        <span className="font-medium text-blue-600">Bill #{bill.bill_number}</span>
+                                        <span>/</span>
+                                        <span className="font-medium text-blue-600">Payments</span>
+                                    </>
+                                ) : (
+                                    <span className="font-medium text-blue-600">All Payments</span>
+                                )}
                             </div>
                         </div>
                     </div>
                     <div className="flex gap-4">
+                        {bill && (
+                            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-center min-w-[120px]">
+                                <p className="text-xs text-blue-700 mb-1">Bill Amount</p>
+                                <p className="text-xl font-bold text-blue-700">₹{Number(bill.total_amount).toLocaleString('en-IN')}</p>
+                            </div>
+                        )}
                         <div className="bg-gray-50 p-3 rounded-lg border text-center min-w-[120px]">
                             <p className="text-xs text-gray-500 mb-1">Total Payments</p>
                             <p className="text-xl font-bold text-gray-800">{stats.total}</p>
@@ -179,9 +215,11 @@ export default function VendorPaymentsPage() {
                                 <thead>
                                     <tr className="bg-gray-50 text-gray-600 border-b text-sm">
                                         <th className="p-4 font-semibold">Payment No.</th>
+                                        <th className="p-4 font-semibold">Bill</th>
                                         <th className="p-4 font-semibold">Date</th>
                                         <th className="p-4 font-semibold">Method</th>
                                         <th className="p-4 font-semibold">Amount</th>
+                                        <th className="p-4 font-semibold">Remaining</th>
                                         <th className="p-4 font-semibold">Status</th>
                                         <th className="p-4 font-semibold text-center">Action</th>
                                     </tr>
@@ -191,6 +229,15 @@ export default function VendorPaymentsPage() {
                                         <tr key={payment.id} className="border-b hover:bg-gray-50 transition-colors">
                                             <td className="p-4">
                                                 <div className="font-medium text-blue-600">{payment.payment_number}</div>
+                                            </td>
+                                            <td className="p-4">
+                                                {payment.vendor_bills?.bill_number ? (
+                                                    <span className="text-sm font-medium text-gray-800 bg-gray-100 px-2 py-0.5 rounded">
+                                                        #{payment.vendor_bills.bill_number}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-sm text-gray-400">—</span>
+                                                )}
                                             </td>
                                             <td className="p-4 text-gray-600">
                                                 <div className="flex items-center gap-2">
@@ -206,6 +253,15 @@ export default function VendorPaymentsPage() {
                                             </td>
                                             <td className="p-4 font-bold text-gray-800">
                                                 ₹{Number(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </td>
+                                            <td className="p-4">
+                                                {payment.remaining_amount > 0 ? (
+                                                    <span className="text-sm font-semibold text-orange-600">
+                                                        ₹{Number(payment.remaining_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-sm text-green-600 font-medium">Fully Paid</span>
+                                                )}
                                             </td>
                                             <td className="p-4">
                                                 <Badge variant={payment.status}>{payment.status}</Badge>

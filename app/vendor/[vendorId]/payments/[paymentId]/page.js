@@ -35,6 +35,7 @@ export default function VendorPaymentDetailsPage() {
     const [loading, setLoading] = useState(true);
     const [vendor, setVendor] = useState(null);
     const [payment, setPayment] = useState(null);
+    const [linkedBill, setLinkedBill] = useState(null);
     const [error, setError] = useState(null);
 
     useEffect(() => {
@@ -64,11 +65,13 @@ export default function VendorPaymentDetailsPage() {
                     id, 
                     payment_number, 
                     amount, 
+                    remaining_amount,
                     payment_method, 
                     payment_date, 
                     status,
                     notes,
                     created_at,
+                    vendor_bill_id,
                     payment_details (*)
                 `)
                 .eq('id', paymentId)
@@ -83,6 +86,16 @@ export default function VendorPaymentDetailsPage() {
             };
 
             setPayment(processedPayment);
+
+            // Fetch linked bill if vendor_bill_id exists
+            if (paymentData.vendor_bill_id) {
+                const { data: billData } = await supabase
+                    .from('vendor_bills')
+                    .select('id, bill_number, total_amount, payment_status, bill_date')
+                    .eq('id', paymentData.vendor_bill_id)
+                    .single();
+                if (billData) setLinkedBill(billData);
+            }
 
         } catch (err) {
             setError(err.message);
@@ -152,6 +165,33 @@ export default function VendorPaymentDetailsPage() {
                             </div>
                         </div>
                     </div>
+
+                    {/* Linked Bill Info */}
+                    {linkedBill && (
+                        <div className="px-6 py-4 border-b bg-gradient-to-r from-green-50 to-emerald-50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Payment for Bill</p>
+                                    <p className="text-lg font-bold text-gray-800">Bill #{linkedBill.bill_number}</p>
+                                    <p className="text-sm text-gray-600 mt-0.5">
+                                        Bill Amount: <strong>₹{Number(linkedBill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                                        {payment.remaining_amount > 0 && (
+                                            <span className="ml-3 text-orange-600">
+                                                Remaining: <strong>₹{Number(payment.remaining_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => router.push(`/vendor/${vendorId}/bills`)}
+                                    className="px-3 py-1.5 bg-white text-gray-700 text-sm rounded-lg hover:bg-gray-50 border shadow-sm flex items-center gap-1"
+                                >
+                                    <FileText size={14} />
+                                    View Bill
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

@@ -138,9 +138,9 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
                     </button>
                     <button
                         onClick={() => onViewBills(vendor)}
-                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
                     >
-                        View Bills
+                        <FileText size={14} /> View Bills
                     </button>
                 </div>
             </div>

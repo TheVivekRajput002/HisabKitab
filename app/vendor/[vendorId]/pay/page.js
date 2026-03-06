@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine, Pen, Undo2, Trash2, Minus, Plus, Crop, RotateCcw, Check } from 'lucide-react';
+import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine, Pen, Undo2, Trash2, Minus, Plus, Crop, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/utils/supabaseClient';
 
@@ -669,6 +669,7 @@ export default function VendorPayPage() {
     const [showScanner, setShowScanner] = useState(false);
     const [scanFilled, setScanFilled] = useState(false);
     const [chequeImageFile, setChequeImageFile] = useState(null);
+    const [previouslyPaid, setPreviouslyPaid] = useState(0);
 
     const [formData, setFormData] = useState({
         payment_method: 'CHEQUE',
@@ -726,9 +727,21 @@ export default function VendorPayPage() {
                     .single();
                 if (billError) throw billError;
                 setBill(billData);
+
+                // Fetch all previous payments for this bill to calculate already-paid amount
+                const { data: existingPayments } = await supabase
+                    .from('payments')
+                    .select('amount')
+                    .eq('vendor_bill_id', billId);
+
+                const totalPaid = (existingPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+                setPreviouslyPaid(totalPaid);
+
+                const remainingToPay = Math.max(0, Number(billData.total_amount) - totalPaid);
+
                 setFormData(prev => ({
                     ...prev,
-                    amount: billData.total_amount || '',
+                    amount: remainingToPay > 0 ? remainingToPay : billData.total_amount || '',
                     reference_invoice: billData.bill_number || ''
                 }));
             }
@@ -765,17 +778,38 @@ export default function VendorPayPage() {
             // Generate auto-payment number (PAY- + Timestamp + Random)
             const paymentNumber = `PAY-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 
+            // Compare bill amount vs payment amount (accounting for previous payments)
+            const paymentAmount = parseFloat(formData.amount);
+            let remainingAmount = 0;
+            let paymentStatus = 'paid';
+            let clearanceStatus = 'CLEARED';
+
+            if (bill) {
+                const billAmount = Number(bill.total_amount);
+                const totalPaidAfterThis = previouslyPaid + paymentAmount;
+                if (totalPaidAfterThis >= billAmount) {
+                    remainingAmount = 0;
+                    paymentStatus = 'paid';
+                    clearanceStatus = 'CLEARED';
+                } else {
+                    remainingAmount = billAmount - totalPaidAfterThis;
+                    paymentStatus = 'partial';
+                    clearanceStatus = 'PENDING';
+                }
+            }
+
             // 1. Insert Payment
             const { data: paymentData, error: paymentError } = await supabase
                 .from('payments')
                 .insert({
                     payment_number: paymentNumber,
-                    customer_id: vendorId, // Using vendorId as customer_id based on schema mapping
+                    customer_id: vendorId,
                     vendor_bill_id: billId || null,
-                    amount: parseFloat(formData.amount),
+                    amount: paymentAmount,
+                    remaining_amount: remainingAmount,
                     payment_method: formData.payment_method,
                     payment_date: formData.payment_date,
-                    status: 'CLEARED',
+                    status: clearanceStatus,
                     notes: formData.notes
                 })
                 .select('id')
@@ -822,12 +856,12 @@ export default function VendorPayPage() {
 
             if (detailsError) throw detailsError;
 
-            // 3. Update the vendor_bills payment_status and link the payment
+            // 3. Update the vendor_bills payment_status
             if (billId) {
                 const { error: updateError } = await supabase
                     .from('vendor_bills')
                     .update({
-                        payment_status: 'paid'
+                        payment_status: paymentStatus
                     })
                     .eq('id', billId);
 
@@ -938,6 +972,51 @@ export default function VendorPayPage() {
                             </div>
                         )}
                     </div>
+
+                    {/* Bill vs Payment Amount Comparison Banner */}
+                    {bill && (
+                        <div className="px-6 py-3 border-b bg-gray-50">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-medium text-gray-600">Bill Amount</span>
+                                <span className="text-lg font-bold text-gray-800">₹{Number(bill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            {previouslyPaid > 0 && (
+                                <div className="flex items-center justify-between mb-2 text-sm">
+                                    <span className="text-gray-500">Previously Paid</span>
+                                    <span className="font-semibold text-green-600">₹{previouslyPaid.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                            )}
+                            {formData.amount && (() => {
+                                const payAmt = parseFloat(formData.amount) || 0;
+                                const billAmt = Number(bill.total_amount);
+                                const totalPaidAfterThis = previouslyPaid + payAmt;
+                                const diff = billAmt - totalPaidAfterThis;
+                                if (diff <= 0) {
+                                    return (
+                                        <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                                            <CheckCircle2 size={16} />
+                                            <span className="font-medium">
+                                                {diff === 0
+                                                    ? <>Amount completes the bill — will be marked as <strong>PAID</strong></>
+                                                    : <>Overpayment by ₹{Math.abs(diff).toLocaleString('en-IN', { minimumFractionDigits: 2 })} — will be marked as <strong>CLEARED</strong></>
+                                                }
+                                            </span>
+                                        </div>
+                                    );
+                                } else {
+                                    return (
+                                        <div className="flex items-center justify-between text-sm bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                                            <div className="flex items-center gap-2 text-yellow-800">
+                                                <AlertCircle size={16} />
+                                                <span className="font-medium">Partial payment — will be marked as <strong>PENDING</strong></span>
+                                            </div>
+                                            <span className="font-bold text-orange-600">Remaining: ₹{diff.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        </div>
+                                    );
+                                }
+                            })()}
+                        </div>
+                    )}
 
                     {success ? (
                         <div className="p-8 text-center">
