@@ -9,12 +9,25 @@ import {
     PackageSearch,
     PersonStanding,
     ChartNoAxesCombined,
-    Camera
+    Camera,
+    LogOut
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabaseClient';
 // import LanguageSwitcher from './LanguageSwitcher'; // Temporarily disabled until i18n is fully implemented
 
 const Header = ({ params }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const router = useRouter();
+
+    const handleLogout = async () => {
+        try {
+            await supabase.auth.signOut();
+            router.push('/login');
+        } catch (error) {
+            console.error('Error logging out:', error.message);
+        }
+    };
 
     const navItems = [
         { name: 'Home', to: '/', icon: Home },
@@ -41,7 +54,7 @@ const Header = ({ params }) => {
                     {/* Logo/Header */}
                     <div className="h-16 flex items-center px-4 border-b border-[#2d2d30]">
                         <div className="flex items-center gap-3 overflow-hidden">
-                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
                                 <span className="text-white font-bold text-sm">SS</span>
                             </div>
                             <span
@@ -74,7 +87,7 @@ const Header = ({ params }) => {
                                     )}
 
                                     {/* Icon */}
-                                    <div className="flex-shrink-0 w-5 h-5">
+                                    <div className="shrink-0 w-5 h-5">
                                         <Icon className="w-5 h-5" />
                                     </div>
 
@@ -97,6 +110,33 @@ const Header = ({ params }) => {
                             );
                         })}
                     </nav>
+
+                    {/* Desktop Logout Button */}
+                    <div className="absolute bottom-0 w-full p-4 border-t border-gray-200">
+                        <button
+                            onClick={handleLogout}
+                            className={`flex items-center gap-3 w-full text-gray-600 hover:text-red-500 transition-colors group relative ${
+                                isHovered ? 'px-4' : 'justify-center'
+                            }`}
+                        >
+                            <LogOut className="w-5 h-5 shrink-0" />
+                            <span
+                                className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
+                                    isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0 hidden'
+                                }`}
+                            >
+                                Logout
+                            </span>
+
+                            {/* Tooltip for collapsed state */}
+                            {!isHovered && (
+                                <div className="absolute left-full ml-2 px-3 py-1.5 bg-[#3c3c3c] text-white text-sm rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 border border-[#454545]">
+                                    Logout
+                                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-[#3c3c3c]" />
+                                </div>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -119,6 +159,15 @@ const Header = ({ params }) => {
                             </Link>
                         );
                     })}
+                    
+                    {/* Mobile Logout Button */}
+                    <button
+                        onClick={handleLogout}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px] text-gray-600 hover:text-red-500"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span className="text-xs font-medium">Logout</span>
+                    </button>
                 </div>
             </div>
         </>
