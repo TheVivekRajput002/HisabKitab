@@ -12,47 +12,9 @@ import {
     Camera,
     LogOut
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/utils/supabaseClient';
 // import LanguageSwitcher from './LanguageSwitcher'; // Temporarily disabled until i18n is fully implemented
-
-// User Section Component
-const UserSection = ({ isHovered }) => {
-    const { user, signOut } = useAuth();
-
-    if (!user) return null;
-
-    return (
-        <div className="p-3">
-            <div className="flex items-center gap-3">
-                {/* User Avatar */}
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    {user.user_metadata?.avatar_url ? (
-                        <img
-                            src={user.user_metadata.avatar_url}
-                            alt="User"
-                            className="w-full h-full rounded-full"
-                        />
-                    ) : (
-                        <User className="w-4 h-4 text-white" />
-                    )}
-                </div>
-
-                {/* User Info & Logout */}
-                <div className={`flex-1 overflow-hidden transition-all duration-300 ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0'}`}>
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                        {user.user_metadata?.full_name || user.email}
-                    </p>
-                    <button
-                        onClick={signOut}
-                        className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
-                    >
-                        <LogOut className="w-3 h-3" />
-                        Logout
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const Header = ({ params }) => {
     const [isHovered, setIsHovered] = useState(false);
@@ -148,6 +110,33 @@ const Header = ({ params }) => {
                             );
                         })}
                     </nav>
+
+                    {/* Desktop Logout Button */}
+                    <div className="absolute bottom-0 w-full p-4 border-t border-gray-200">
+                        <button
+                            onClick={handleLogout}
+                            className={`flex items-center gap-3 w-full text-gray-600 hover:text-red-500 transition-colors group relative ${
+                                isHovered ? 'px-4' : 'justify-center'
+                            }`}
+                        >
+                            <LogOut className="w-5 h-5 shrink-0" />
+                            <span
+                                className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
+                                    isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0 hidden'
+                                }`}
+                            >
+                                Logout
+                            </span>
+
+                            {/* Tooltip for collapsed state */}
+                            {!isHovered && (
+                                <div className="absolute left-full ml-2 px-3 py-1.5 bg-[#3c3c3c] text-white text-sm rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 border border-[#454545]">
+                                    Logout
+                                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-[#3c3c3c]" />
+                                </div>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
 
