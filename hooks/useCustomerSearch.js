@@ -40,7 +40,7 @@ export const useCustomerSearch = (phoneNumber) => {
                     setCustomerData(null);
                 }
             } catch (error) {
-                console.error('Error searching customers:', error);
+                console.error('Error searching customers:', error?.message || error);
                 setSearchResults([]);
                 setFound(false);
                 setCustomerData(null);

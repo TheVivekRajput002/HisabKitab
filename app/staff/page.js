@@ -56,8 +56,6 @@ const StaffManagement = () => {
   // Add Staff Form
   const [newStaff, setNewStaff] = useState({
     full_name: '',
-    email: '',
-    password: '',
     phone_number: '',
     designation: '',
     monthly_salary: '',
@@ -145,27 +143,17 @@ const StaffManagement = () => {
   };
 
   const handleAddStaff = async () => {
-    if (!newStaff.full_name || !newStaff.email || !newStaff.password || !newStaff.monthly_salary) {
+    if (!newStaff.full_name || !newStaff.monthly_salary) {
       alert('Please fill all required fields');
       return;
     }
 
     setSaving(true);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: newStaff.email,
-        password: newStaff.password,
-        options: { data: { full_name: newStaff.full_name } }
-      });
-
-      if (authError) throw authError;
-
       const { error: staffError } = await supabase
         .from('staff')
         .insert({
-          user_id: authData.user.id,
           full_name: newStaff.full_name,
-          email: newStaff.email,
           phone_number: newStaff.phone_number,
           designation: newStaff.designation,
           monthly_salary: parseFloat(newStaff.monthly_salary),
@@ -177,7 +165,7 @@ const StaffManagement = () => {
       alert('Staff added successfully!');
       setShowAddStaffModal(false);
       setNewStaff({
-        full_name: '', email: '', password: '', phone_number: '',
+        full_name: '', phone_number: '',
         designation: '', monthly_salary: '', date_of_joining: getLocalDateString()
       });
       fetchAllStaff();
@@ -560,14 +548,6 @@ const StaffManagement = () => {
               <div>
                 <label className="block text-sm font-medium mb-1">Full Name *</label>
                 <input type="text" value={newStaff.full_name} onChange={(e) => setNewStaff({ ...newStaff, full_name: e.target.value })} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="John Doe" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email *</label>
-                <input type="email" value={newStaff.email} onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="john@company.com" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Password *</label>
-                <input type="password" value={newStaff.password} onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })} className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none" placeholder="Min. 6 characters" />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Phone Number</label>

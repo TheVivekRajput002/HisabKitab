@@ -14,12 +14,13 @@ The application is built on modern React primitives utilizing the Next.js App Ro
 | `@tailwindcss/postcss` | `^4` | PostCSS plugin integrating Tailwind CSS v4. |
 | **Lucide React** | `^0.562.0` | Consistent vector icons used throughout the UI. |
 
-## 2. Database & Authentication (BaaS)
-The application relies on Supabase for robust PostgreSQL data hosting, Row Level Security (RLS), and file storage.
+## 2. Database & Authentication
+The application uses **Clerk** for authentication (Google OAuth, pre-built UI) and **Supabase** for PostgreSQL database hosting, Row Level Security (RLS), and file storage.
 
 | Dependency | Version | Purpose |
 | :--- | :--- | :--- |
-| **@supabase/supabase-js** | `^2.90.1` | Official Supabase client for DB queries, authentication, and storage buckets. |
+| **@clerk/nextjs** | `latest` | Authentication provider with pre-built sign-in/sign-up UI and session management. |
+| **@supabase/supabase-js** | `^2.90.1` | Official Supabase client for DB queries and storage buckets. |
 
 ## 3. Artificial Intelligence & OCR
 Generative AI enables "magic" workflows like scanning supplier bills and cheques without manual data entry.
