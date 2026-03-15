@@ -5,11 +5,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Minus, Edit2, Trash2, Save, X, Package, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import Link from 'next/link';
+import { useCompany } from '@/hooks/useCompany';
 
 const ProductDetails = () => {
     const params = useParams();
     const productId = params.id;
     const router = useRouter();
+    const { companyId } = useCompany();
 
     const [product, setProduct] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -34,6 +36,7 @@ const ProductDetails = () => {
                 .from('products')
                 .select('*')
                 .eq('id', productId)
+                .eq('company_id', companyId)
                 .single();
 
             if (error) throw error;
@@ -45,11 +48,11 @@ const ProductDetails = () => {
         } finally {
             setLoading(false);
         }
-    }, [productId]);
+    }, [productId, companyId]);
 
     useEffect(() => {
-        fetchProductDetails();
-    }, [fetchProductDetails]);
+        if (companyId) fetchProductDetails();
+    }, [fetchProductDetails, companyId]);
 
     const handleStockUpdate = async () => {
         const amount = parseInt(stockInput);

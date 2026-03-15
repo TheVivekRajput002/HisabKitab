@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
 
-export const useCustomerSearch = (phoneNumber) => {
+export const useCustomerSearch = (phoneNumber, companyId) => {
     const [searching, setSearching] = useState(false);
     const [found, setFound] = useState(false);
     const [customerData, setCustomerData] = useState(null);
@@ -19,12 +19,18 @@ export const useCustomerSearch = (phoneNumber) => {
 
             setSearching(true);
             try {
-                const { data, error } = await supabase
+                let query = supabase
                     .from('customers')
                     .select('id, name, phone_number, address, vehicle, gstin')
-                    .ilike('phone_number', `${phoneNumber}%`) // 🆕 Search by prefix
+                    .ilike('phone_number', `${phoneNumber}%`)
                     .order('created_at', { ascending: false })
-                    .limit(10); // 🆕 Show top 10 results
+                    .limit(10);
+
+                if (companyId) {
+                    query = query.eq('company_id', companyId);
+                }
+
+                const { data, error } = await query;
 
                 if (error) throw error;
 
@@ -49,9 +55,9 @@ export const useCustomerSearch = (phoneNumber) => {
             }
         };
 
-        const timer = setTimeout(searchCustomers, 300); // 🆕 Debounce for better performance
+        const timer = setTimeout(searchCustomers, 300);
         return () => clearTimeout(timer);
-    }, [phoneNumber]);
+    }, [phoneNumber, companyId]);
 
-    return { searching, found, customerData, searchResults }; // 🆕 Return searchResults
-};
+    return { searching, found, customerData, searchResults };
+};

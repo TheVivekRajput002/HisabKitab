@@ -8,11 +8,13 @@ import {
     Calendar, DollarSign, TrendingUp, AlertCircle, Edit, Trash2,
     Package, Clock, CheckCircle, XCircle
 } from 'lucide-react';
+import { useCompany } from '@/hooks/useCompany';
 
 const CustomerDetails = () => {
     const params = useParams();
     const customerId = params?.id;
     const router = useRouter();
+    const { companyId } = useCompany();
     const [customer, setCustomer] = useState(null);
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -28,8 +30,8 @@ const CustomerDetails = () => {
     });
 
     useEffect(() => {
-        fetchCustomerData();
-    }, [customerId]);
+        if (companyId) fetchCustomerData();
+    }, [customerId, companyId]);
 
     const fetchCustomerData = async () => {
         setLoading(true);
@@ -39,6 +41,7 @@ const CustomerDetails = () => {
                 .from('customers')
                 .select('*')
                 .eq('id', customerId)
+                .eq('company_id', companyId)
                 .single();
 
             if (customerError) throw customerError;
@@ -49,6 +52,7 @@ const CustomerDetails = () => {
                 .from('invoices')
                 .select('*')
                 .eq('customer_id', customerId)
+                .eq('company_id', companyId)
                 .order('bill_date', { ascending: false });
 
             if (invoicesError) throw invoicesError;

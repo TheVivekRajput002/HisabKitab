@@ -4,9 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, DollarSign, Users, FileText, TrendingUp, Package, Filter, BarChart3 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 
 
 const Data = () => {
+  const { companyId } = useCompany();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,10 +37,10 @@ const Data = () => {
   }, []);
 
   useEffect(() => {
-    if (startDate && endDate) {
+    if (startDate && endDate && companyId) {
       fetchAnalytics();
     }
-  }, [startDate, endDate]);
+  }, [startDate, endDate, companyId]);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -50,6 +52,7 @@ const Data = () => {
           *,
           customer:customers(id, name, phone_number)
         `)
+        .eq('company_id', companyId)
         .gte('bill_date', startDate)
         .lte('bill_date', endDate)
         .order('bill_date', { ascending: false });
@@ -67,7 +70,8 @@ const Data = () => {
       // Fetch products for stock value calculation
       const { data: products, error: productsError } = await supabase
         .from('products')
-        .select('current_stock, purchase_rate');
+        .select('current_stock, purchase_rate')
+        .eq('company_id', companyId);
 
       if (productsError) throw productsError;
 

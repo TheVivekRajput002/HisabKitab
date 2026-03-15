@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Building2, Plus, Edit2, Trash2, FileText, Calendar, DollarSign, AlertCircle, Loader2, ScanLine, CreditCard } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 
 // ============================================================================
 // UI COMPONENTS
@@ -152,7 +153,7 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
 // VENDOR FORM MODAL
 // ============================================================================
 
-function VendorFormModal({ vendor, onClose, onSave }) {
+function VendorFormModal({ vendor, onClose, onSave, companyId }) {
     const [formData, setFormData] = useState({
         name: vendor?.name || '',
         gstin: vendor?.gstin || ''
@@ -188,7 +189,8 @@ function VendorFormModal({ vendor, onClose, onSave }) {
                     .from('vendors')
                     .insert({
                         name: formData.name,
-                        gstin: formData.gstin || null
+                        gstin: formData.gstin || null,
+                        company_id: companyId
                     });
 
                 if (insertError) throw insertError;
@@ -282,6 +284,7 @@ function VendorFormModal({ vendor, onClose, onSave }) {
 
 export default function VendorPage() {
     const router = useRouter();
+    const { companyId } = useCompany();
     const [vendors, setVendors] = useState([]);
     const [filteredVendors, setFilteredVendors] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
@@ -291,8 +294,8 @@ export default function VendorPage() {
     const [editingVendor, setEditingVendor] = useState(null);
 
     useEffect(() => {
-        fetchVendors();
-    }, []);
+        if (companyId) fetchVendors();
+    }, [companyId]);
 
     useEffect(() => {
         filterVendors();
@@ -304,6 +307,7 @@ export default function VendorPage() {
             const { data, error: fetchError } = await supabase
                 .from('vendors')
                 .select('*')
+                .eq('company_id', companyId)
                 .order('created_at', { ascending: false });
 
             if (fetchError) throw fetchError;
@@ -506,6 +510,7 @@ export default function VendorPage() {
                         vendor={editingVendor}
                         onClose={handleFormClose}
                         onSave={handleFormSave}
+                        companyId={companyId}
                     />
                 )}
             </div>

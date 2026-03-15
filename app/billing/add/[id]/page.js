@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 
 // Import custom hooks
 import { useCustomerSearch } from '@/hooks/useCustomerSearch';
@@ -31,6 +32,7 @@ const InvoiceEstimateAdd = () => {
   const params = useParams();
   const id = params?.id;
   const isInvoice = id === 'invoice';
+  const { companyId } = useCompany();
 
   const router = useRouter();
   const inputRefs = useRef({});
@@ -167,12 +169,12 @@ const InvoiceEstimateAdd = () => {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
   // Custom hooks
-  const { searching: searchingCustomer, found: customerFound, customerData, searchResults: customerSearchResults } = useCustomerSearch(customerDetails.phoneNumber);
+  const { searching: searchingCustomer, found: customerFound, customerData, searchResults: customerSearchResults } = useCustomerSearch(customerDetails.phoneNumber, companyId);
   const { calculateProductTotal, subtotal, totalGST, grandTotal } = useInvoiceCalculations(products, gstIncluded);
   useProductAutoSave(products, productsFromDB, (productDetails) => {
     addToast(productDetails);
     setNewlyAddedProducts(prev => new Set([...prev, productDetails.name]));
-  });
+  }, companyId);
 
   const calculateGSTDistribution = () => {
     const distribution = {};
@@ -555,21 +557,25 @@ const InvoiceEstimateAdd = () => {
       if (existingCustomers && existingCustomers.length > 0) {
         customerId = existingCustomers[0].id;
       } else {
-        const { data: newCustomer } = await supabase
+        const { data: newCustomer, error: customerError } = await supabase
           .from('customers')
           .insert([{
             name: customerDetails.customerName,
             phone_number: customerDetails.phoneNumber,
             address: customerDetails.customerAddress,
-            vehicle: customerDetails.vehicle
+            vehicle: customerDetails.vehicle,
+            company_id: companyId
           }])
           .select()
           .single();
 
+        if (customerError) {
+          throw new Error('Failed to create customer: ' + customerError.message);
+        }
         customerId = newCustomer.id;
       }
 
-      const { data: invoiceData } = await supabase
+      const { data: invoiceData, error: invoiceError } = await supabase
         .from(isInvoice ? 'invoices' : 'estimate')
         .insert([{
           ...(isInvoice
@@ -581,10 +587,16 @@ const InvoiceEstimateAdd = () => {
           total_amount: grandTotal,
           mode_of_payment: paymentMode,
           gstin: gstin,
-          gst_included: gstIncluded
+          gst_included: gstIncluded,
+          company_id: companyId
         }])
         .select()
         .single();
+
+      if (invoiceError) {
+        throw new Error('Failed to save invoice: ' + invoiceError.message);
+      }
+
 
       const itemsToInsert = products.map(product => ({
         ...(isInvoice

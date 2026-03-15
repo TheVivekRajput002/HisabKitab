@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import { Search as SearchIcon, FileText, Phone, Calendar, DollarSign, X, User, AlertCircle, ChevronLeft, ChevronRight, Download, Printer, MessageCircle, CheckSquare, Square, ArrowUpDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { sendInvoiceToWhatsApp } from '@/utils/sendWhatsApp';
@@ -34,6 +35,7 @@ const ITEMS_PER_PAGE = 10;
 
 const InvoiceSearch = () => {
   const router = useRouter();
+  const { companyId } = useCompany();
   const [searchQuery, setSearchQuery] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -59,16 +61,18 @@ const InvoiceSearch = () => {
   const debouncedPhone = useDebounce(phoneNumber, 300);
 
   useEffect(() => {
+    if (!companyId) return;
     fetchInvoices();
-  }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, currentPage, sortBy]);
+  }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, currentPage, sortBy, companyId]);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, sortBy]);
 
   useEffect(() => {
+    if (!companyId) return;
     fetchUnpaidAmount();
-  }, []);
+  }, [companyId]);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -76,6 +80,11 @@ const InvoiceSearch = () => {
       let query = supabase
         .from('invoices')
         .select(`*, customer:customers(name, phone_number, address)`, { count: 'exact' });
+
+      // Company isolation
+      if (companyId) {
+        query = query.eq('company_id', companyId);
+      }
 
       // Search filters - simplified to avoid query errors
       if (debouncedSearch) {
@@ -148,11 +157,13 @@ const InvoiceSearch = () => {
   };
 
   const fetchUnpaidAmount = async () => {
+    if (!companyId) return;
     try {
       const { data } = await supabase
         .from('invoices')
         .select('total_amount, mode_of_payment')
-        .eq('mode_of_payment', 'unpaid');
+        .eq('mode_of_payment', 'unpaid')
+        .eq('company_id', companyId);
 
       if (data) {
         const unpaid = data.reduce((sum, inv) => sum + parseFloat(inv.total_amount), 0);

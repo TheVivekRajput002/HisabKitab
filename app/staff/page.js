@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import { Users, Search, Plus, Edit2, Trash2, DollarSign, X, FileText } from 'lucide-react';
 import Link from 'next/link';
 
@@ -44,6 +45,7 @@ const StaffManagement = () => {
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null);
+  const { companyId } = useCompany();
 
   // Modals
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -76,8 +78,8 @@ const StaffManagement = () => {
   const [monthlyStats, setMonthlyStats] = useState(null);
 
   useEffect(() => {
-    fetchAllStaff();
-  }, []);
+    if (companyId) fetchAllStaff();
+  }, [companyId]);
 
   useEffect(() => {
     if (selectedStaff) {
@@ -90,6 +92,7 @@ const StaffManagement = () => {
     const { data, error } = await supabase
       .from('staff')
       .select('*')
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false });
 
     if (data) setStaffList(data);
@@ -157,7 +160,8 @@ const StaffManagement = () => {
           phone_number: newStaff.phone_number,
           designation: newStaff.designation,
           monthly_salary: parseFloat(newStaff.monthly_salary),
-          date_of_joining: newStaff.date_of_joining
+          date_of_joining: newStaff.date_of_joining,
+          company_id: companyId
         });
 
       if (staffError) throw staffError;

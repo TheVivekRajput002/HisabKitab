@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Package, Filter, X, AlertTriangle, ChevronLeft, ChevronRight, Hash } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRouter } from 'next/navigation';
+import { useCompany } from '@/hooks/useCompany';
 import '@/app/inventory/search/animations.css';
 
 // Debounce hook
@@ -37,6 +38,7 @@ const ProductSkeleton = () => (
 const ITEMS_PER_PAGE = 10;
 
 const ProductSearch = () => {
+    const { companyId } = useCompany();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showLowStockOnly, setShowLowStockOnly] = useState(false);
@@ -63,12 +65,12 @@ const ProductSearch = () => {
     });
 
     useEffect(() => {
-        fetchFilterOptions();
-    }, []);
+        if (companyId) fetchFilterOptions();
+    }, [companyId]);
 
     useEffect(() => {
-        fetchProducts();
-    }, [debouncedSearchQuery, debouncedPartNumber, filters.brand, filters.vehicle, filters.hsn, showLowStockOnly, currentPage]);
+        if (companyId) fetchProducts();
+    }, [debouncedSearchQuery, debouncedPartNumber, filters.brand, filters.vehicle, filters.hsn, showLowStockOnly, currentPage, companyId]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -78,7 +80,8 @@ const ProductSearch = () => {
         try {
             const { data, error } = await supabase
                 .from('products')
-                .select('brand, vehicle_model, hsn_code');
+                .select('brand, vehicle_model, hsn_code')
+                .eq('company_id', companyId);
 
             if (error) throw error;
 
@@ -98,7 +101,8 @@ const ProductSearch = () => {
         try {
             let query = supabase
                 .from('products')
-                .select('*', { count: 'exact' });
+                .select('*', { count: 'exact' })
+                .eq('company_id', companyId);
 
             // Search by name, brand, vehicle, or part number
             if (debouncedSearchQuery) {

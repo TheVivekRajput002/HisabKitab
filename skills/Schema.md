@@ -17,7 +17,7 @@ name
 string
 company_code
 UK
-uuid
+text
 created_by
 FK
 jsonb
@@ -29,7 +29,7 @@ PK
 uuid
 company_id
 FK
-uuid
+text
 user_id
 FK
 string

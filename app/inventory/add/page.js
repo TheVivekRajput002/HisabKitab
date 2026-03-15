@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Package, AlertCircle, CheckCircle } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useRouter } from 'next/navigation';
+import { useCompany } from '@/hooks/useCompany';
 
 const AddProduct = () => {
     const [formData, setFormData] = useState({
@@ -25,18 +26,20 @@ const AddProduct = () => {
     const [showBrandSuggestions, setShowBrandSuggestions] = useState(false);
     const [showVehicleSuggestions, setShowVehicleSuggestions] = useState(false);
     const router = useRouter();
+    const { companyId } = useCompany();
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState({ type: '', text: '' });
 
     useEffect(() => {
-        fetchSuggestions();
-    }, []);
+        if (companyId) fetchSuggestions();
+    }, [companyId]);
 
     const fetchSuggestions = async () => {
         try {
             const { data, error } = await supabase
                 .from('products')
-                .select('brand, vehicle_model');
+                .select('brand, vehicle_model')
+                .eq('company_id', companyId);
 
             if (error) throw error;
 
@@ -83,6 +86,11 @@ const AddProduct = () => {
     const handleSubmit = async () => {
         if (!validateForm()) return;
 
+        if (!companyId) {
+            setMessage({ type: 'error', text: 'Company ID is missing. Please refresh and try again.' });
+            return;
+        }
+
         setLoading(true);
         setMessage({ type: '', text: '' });
 
@@ -100,7 +108,8 @@ const AddProduct = () => {
                     gst_percentage: parseFloat(formData.gst_percentage) || 0,
                     discount: parseFloat(formData.discount) || 0,
                     current_stock: parseInt(formData.current_stock) || 0,
-                    minimum_stock: parseInt(formData.minimum_stock) || 0
+                    minimum_stock: parseInt(formData.minimum_stock) || 0,
+                    company_id: companyId
                 }]);
 
             if (error) throw error;

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import {
     Search as SearchIcon, User, Phone, AlertCircle, Car, X, Filter,
     DollarSign, TrendingUp, TrendingDown, MapPin, FileText, Calendar,
@@ -11,6 +12,7 @@ import {
 
 const Customer1Page = () => {
     const router = useRouter();
+    const { companyId } = useCompany();
     // Customer Search State
     const [searchQuery, setSearchQuery] = useState('');
     const [customers, setCustomers] = useState([]);
@@ -66,8 +68,8 @@ const Customer1Page = () => {
 
     // Load customer list on mount
     useEffect(() => {
-        fetchInitialData();
-    }, []);
+        if (companyId) fetchInitialData();
+    }, [companyId]);
 
     // Apply filters when search/filter changes
     useEffect(() => {
@@ -90,6 +92,7 @@ const Customer1Page = () => {
             const { data: customersData } = await supabase
                 .from('customers')
                 .select('*')
+                .eq('company_id', companyId)
                 .order('created_at', { ascending: false });
 
             setCustomers(customersData || []);
@@ -97,7 +100,8 @@ const Customer1Page = () => {
             if (customersData && customersData.length > 0) {
                 const { data: invoicesData } = await supabase
                     .from('invoices')
-                    .select('customer_id, total_amount, mode_of_payment');
+                    .select('customer_id, total_amount, mode_of_payment')
+                    .eq('company_id', companyId);
 
                 if (invoicesData) {
                     const stats = {};

@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabaseClient';
 import { ArrowLeft, User, Phone, MapPin, Car, Wrench, Save, AlertCircle } from 'lucide-react';
+import { useCompany } from '@/hooks/useCompany';
 
 const AddCustomer = () => {
     const router = useRouter();
+    const { companyId } = useCompany();
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState({});
 
@@ -66,6 +68,7 @@ const AddCustomer = () => {
                 .from('customers')
                 .select('id, name')
                 .eq('phone_number', formData.phone_number)
+                .eq('company_id', companyId)
                 .single();
 
             if (existingCustomer) {
@@ -82,7 +85,8 @@ const AddCustomer = () => {
                     phone_number: formData.phone_number.trim(),
                     address: formData.address.trim() || null,
                     vehicle: formData.vehicle.trim() || null,
-                    mechanic: formData.mechanic.trim() || null
+                    mechanic: formData.mechanic.trim() || null,
+                    company_id: companyId
                 }])
                 .select()
                 .single();

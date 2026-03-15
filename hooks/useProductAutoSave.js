@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react';
 import { supabase } from '@/utils/supabaseClient';
 
-export const useProductAutoSave = (products, productsFromDB, onProductSaved) => {
+export const useProductAutoSave = (products, productsFromDB, onProductSaved, companyId) => {
     const saveTimeouts = useRef({});
 
     useEffect(() => {
@@ -11,6 +11,7 @@ export const useProductAutoSave = (products, productsFromDB, onProductSaved) => 
 
             if (productsFromDB.has(product.id)) return;
             if (!product.productName || !product.rate) return;
+            if (!companyId) return; // Wait for companyId to be available
 
             if (saveTimeouts.current[product.id]) {
                 clearTimeout(saveTimeouts.current[product.id]);
@@ -24,6 +25,7 @@ export const useProductAutoSave = (products, productsFromDB, onProductSaved) => 
                         .from('products')
                         .select('id')
                         .eq('product_name', product.productName)
+                        .eq('company_id', companyId)
                         .eq('hsn_code', product.hsnCode)
                         .maybeSingle();
 
@@ -39,7 +41,8 @@ export const useProductAutoSave = (products, productsFromDB, onProductSaved) => 
                                 hsn_code: product.hsnCode,
                                 purchase_rate: product.rate,
                                 current_stock: 0,
-                                minimum_stock: 5
+                                minimum_stock: 5,
+                                company_id: companyId
                             }])
                             .select()
                             .single();
@@ -76,5 +79,5 @@ export const useProductAutoSave = (products, productsFromDB, onProductSaved) => 
         return () => {
             Object.values(saveTimeouts.current).forEach(timeout => clearTimeout(timeout));
         };
-    }, [products, productsFromDB, onProductSaved]);
+    }, [products, productsFromDB, onProductSaved, companyId]);
 };

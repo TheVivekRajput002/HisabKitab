@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import { Search as SearchIcon, FileText, Phone, Calendar, DollarSign, X, User, AlertCircle, ChevronLeft, ChevronRight, Download, Printer, MessageCircle, CheckSquare, Square } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { sendInvoiceToWhatsApp } from '@/utils/sendWhatsApp';
@@ -34,6 +35,7 @@ const ITEMS_PER_PAGE = 10;
 
 const EstimateSearch = () => {
     const router = useRouter();
+    const { companyId } = useCompany();
     const [searchQuery, setSearchQuery] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -74,6 +76,10 @@ const EstimateSearch = () => {
             let query = supabase
                 .from('estimate')
                 .select(`*, customer:customers(name, phone_number, address)`, { count: 'exact' });
+
+            if (companyId) {
+                query = query.eq('company_id', companyId);
+            }
 
             if (debouncedSearch) {
                 query = query.ilike('estimate_number', `%${debouncedSearch}%`);
@@ -146,7 +152,8 @@ const EstimateSearch = () => {
             const { data } = await supabase
                 .from('estimate')
                 .select('total_amount, mode_of_payment')
-                .eq('mode_of_payment', 'unpaid');
+                .eq('mode_of_payment', 'unpaid')
+                .eq('company_id', companyId);
 
             if (data) {
                 const unpaid = data.reduce((sum, est) => sum + parseFloat(est.total_amount), 0);

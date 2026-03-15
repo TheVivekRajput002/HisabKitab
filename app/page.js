@@ -2,10 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import { TrendingDown, TrendingUp } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function HomePage() {
+  const { companyId } = useCompany();
   const [todayStats, setTodayStats] = useState({
     billsCount: 0,
     totalSales: 0
@@ -15,8 +17,8 @@ export default function HomePage() {
   const [timeRange, setTimeRange] = useState('month'); // 'today', 'week', 'month'
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [timeRange]);
+    if (companyId) fetchDashboardData();
+  }, [timeRange, companyId]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -41,6 +43,7 @@ export default function HomePage() {
       const { data: invoices, error } = await supabase
         .from('invoices')
         .select('*')
+        .eq('company_id', companyId)
         .gte('created_at', startDate.toISOString())
         .lt('created_at', endDate.toISOString())
         .order('created_at', { ascending: true });

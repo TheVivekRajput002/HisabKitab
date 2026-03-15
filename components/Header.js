@@ -13,10 +13,17 @@ import {
     LogOut
 } from 'lucide-react';
 import { SignOutButton, UserButton, Show } from '@clerk/nextjs';
+import { useCompany } from '@/hooks/useCompany';
 // import LanguageSwitcher from './LanguageSwitcher'; // Temporarily disabled until i18n is fully implemented
 
 const Header = ({ params }) => {
     const [isHovered, setIsHovered] = useState(false);
+    const { companyName } = useCompany();
+
+    // Get initials from company name (e.g. "Shiv Shakti" -> "SS")
+    const initials = companyName
+        ? companyName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+        : 'HK';
 
     const navItems = [
         { name: 'Home', to: '/', icon: Home },
@@ -44,13 +51,13 @@ const Header = ({ params }) => {
                     <div className="h-16 flex items-center px-4 border-b border-[#2d2d30]">
                         <div className="flex items-center gap-3 overflow-hidden">
                             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                                <span className="text-white font-bold text-sm">SS</span>
+                                <span className="text-white font-bold text-sm">{initials}</span>
                             </div>
                             <span
                                 className={`text-gray-600 font-semibold text-sm whitespace-nowrap transition-all duration-300 ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0'
                                     }`}
                             >
-                                Shiv Shakti AutoMobile
+                                {companyName || 'HisabKitab'}
                             </span>
                         </div>
                     </div>
