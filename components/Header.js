@@ -10,7 +10,8 @@ import {
     PersonStanding,
     ChartNoAxesCombined,
     Camera,
-    LogOut
+    LogOut,
+    Building2
 } from 'lucide-react';
 import { SignOutButton, UserButton, Show } from '@clerk/nextjs';
 import { useCompany } from '@/hooks/useCompany';
@@ -107,7 +108,7 @@ const Header = ({ params }) => {
                         })}
                     </nav>
 
-                    {/* Desktop Bottom: User Button + Logout */}
+                    {/* Desktop Bottom: User Button + Change Company + Logout */}
                     <div className="absolute bottom-0 w-full p-4 border-t border-gray-200">
                         <Show when="signed-in">
                             <div className="flex items-center gap-3 mb-3">
@@ -120,6 +121,30 @@ const Header = ({ params }) => {
                                 </span>
                             </div>
                         </Show>
+
+                        {/* Change Company Button */}
+                        <Link
+                            href="/change-company"
+                            className={`flex items-center gap-3 w-full text-gray-600 hover:text-blue-600 transition-colors group relative mb-3 ${isHovered ? 'px-4' : 'justify-center'
+                                }`}
+                        >
+                            <Building2 className="w-5 h-5 shrink-0" />
+                            <span
+                                className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${isHovered ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 w-0 hidden'
+                                    }`}
+                            >
+                                Change Company
+                            </span>
+
+                            {/* Tooltip for collapsed state */}
+                            {!isHovered && (
+                                <div className="absolute left-full ml-2 px-3 py-1.5 bg-[#3c3c3c] text-white text-sm rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50 border border-[#454545]">
+                                    Change Company
+                                    <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-[#3c3c3c]" />
+                                </div>
+                            )}
+                        </Link>
+
                         <SignOutButton>
                             <button
                                 className={`flex items-center gap-3 w-full text-gray-600 hover:text-red-500 transition-colors group relative ${isHovered ? 'px-4' : 'justify-center'
@@ -166,6 +191,15 @@ const Header = ({ params }) => {
                         );
                     })}
                     
+                    {/* Mobile Change Company Button */}
+                    <Link
+                        href="/change-company"
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px] text-gray-600 hover:text-blue-600"
+                    >
+                        <Building2 className="w-5 h-5" />
+                        <span className="text-xs font-medium">Switch</span>
+                    </Link>
+
                     {/* Mobile Logout Button */}
                     <SignOutButton>
                         <button

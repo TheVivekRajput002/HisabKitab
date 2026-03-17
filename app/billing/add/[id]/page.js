@@ -323,6 +323,7 @@ const InvoiceEstimateAdd = () => {
         const { data, error } = await supabase
           .from('products')
           .select('id, product_name, hsn_code, purchase_rate, gst_percentage, current_stock, minimum_stock, brand')
+          .eq('company_id', companyId)
           .or(`product_name.ilike.%${searchQuery}%,brand.ilike.%${searchQuery}%`)
           .limit(10);
 
@@ -552,7 +553,8 @@ const InvoiceEstimateAdd = () => {
       const { data: existingCustomers } = await supabase
         .from('customers')
         .select('id')
-        .eq('phone_number', customerDetails.phoneNumber);
+        .eq('phone_number', customerDetails.phoneNumber)
+        .eq('company_id', companyId);
 
       if (existingCustomers && existingCustomers.length > 0) {
         customerId = existingCustomers[0].id;

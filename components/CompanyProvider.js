@@ -68,8 +68,7 @@ export default function CompanyProvider({ children }) {
         .insert([{
           company_id: company.id,
           user_id: user.id,
-          role: 'admin',
-          invited_by: user.id
+          role: 'admin'
         }]);
 
       if (memberError) throw memberError;
