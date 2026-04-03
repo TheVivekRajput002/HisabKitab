@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { Camera, Upload, X, Check, AlertCircle, Trash2, Edit2, Save, ChevronDown, ChevronUp, Crop, RotateCcw, Loader2, QrCode, ArrowLeft } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/utils/supabaseClient';
+import { useCompany } from '@/hooks/useCompany';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 
@@ -388,7 +389,7 @@ const productService = {
 
   },
 
-  createPurchaseTransaction: async (products, vendorData, invoiceData) => {
+  createPurchaseTransaction: async (products, vendorData, invoiceData, companyId) => {
     const results = {
       created: 0,
       updated: 0,
@@ -441,7 +442,8 @@ const productService = {
             .from('vendors')
             .insert({
               name: vendorData.name,
-              gstin: vendorData.gstin || null
+              gstin: vendorData.gstin || null,
+              company_id: companyId || null
             })
             .select('id, name')
             .single();
@@ -1139,6 +1141,7 @@ function ConfirmationModal({ products, onConfirm, onCancel, isProcessing }) {
 
 export default function InvoiceScanner() {
   const router = useRouter();
+  const { companyId } = useCompany();
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [products, setProducts] = useState([]);
@@ -1240,7 +1243,7 @@ export default function InvoiceScanner() {
         photoFile: image // Add the scanned image file
       };
 
-      const results = await productService.createPurchaseTransaction(products, vendorData, invoiceDataWithPhoto);
+      const results = await productService.createPurchaseTransaction(products, vendorData, invoiceDataWithPhoto, companyId);
 
       // Check for errors first
       if (results.errors.length > 0) {

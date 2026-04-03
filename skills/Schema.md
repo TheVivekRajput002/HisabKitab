@@ -125,6 +125,9 @@ string
 name
 string
 gstin
+uuid
+company_id
+FK → companies(id)
 vendor_bills
 uuid
 id
@@ -149,7 +152,7 @@ quantity
 numeric
 purchase_rate
 payments
-vendors: Directory of suppliers.
+vendors: Directory of suppliers. company_id (FK → companies) added for multi-tenant isolation — vendors are scoped per company. An index (idx_vendors_company_id) exists for fast filtering. RLS policy: company_id IS NULL OR user_has_company_access(company_id).
 vendor_bills: Inbound purchasing bills (often captured via AI OCR scanning). Tracks payment_status.
 vendor_bill_items: Maps directly to products. AI integrations typically execute "Add" or "Replace" flows to synchronize vendor_bill_items directly into the products.current_stock when bills are validated.
 5. Payments Ledger
