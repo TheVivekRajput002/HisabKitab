@@ -104,6 +104,8 @@ A comprehensive, modern business management application built with Next.js for m
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
    GEMINI_API_KEY=your_gemini_api_key
+   # Optional failover keys (comma-separated). Used before GEMINI_API_KEY when set.
+   GEMINI_API_KEYS=primary_key,backup_key_1,backup_key_2
    ```
 
 4. **Set up Supabase database**

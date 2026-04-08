@@ -564,14 +564,19 @@ const productService = {
       if (billId) {
         const billItems = products.map(p => {
           const productId = productIdMap.get(p.name);
-          const totalAmount = p.quantity * p.price * (1 + (p.gst_percentage || 0) / 100);
+          const discountPct = Number(p.discount) || 0;
+          const gstPct = Number(p.gst_percentage) || 0;
+          const base = p.quantity * p.price;
+          const afterDiscount = base * (1 - discountPct / 100);
+          const totalAmount = afterDiscount * (1 + gstPct / 100);
 
           return {
             vendor_bill_id: billId,
             product_id: productId || null,
             quantity: p.quantity,
             purchase_rate: p.price,
-            gst_percentage: p.gst_percentage || 0,
+            gst_percentage: gstPct,
+            discount: discountPct,
             total_amount: totalAmount
           };
         });
@@ -912,6 +917,11 @@ const ProductCard = React.memo(({ product, onUpdate, onDelete, isSelected, onTog
   const handleSave = () => { onUpdate(product.id, editData); setIsEditing(false); };
   const validation = validationService.validateProduct(editData);
   const confidenceColor = product.confidence >= 0.8 ? 'success' : product.confidence >= 0.6 ? 'warning' : 'error';
+  const baseAmount = (Number(product.quantity) || 0) * (Number(product.price) || 0);
+  const discountPercentage = Number(product.discount) || 0;
+  const gstPercentage = Number(product.gst_percentage) || 0;
+  const amountAfterDiscount = baseAmount * (1 - discountPercentage / 100);
+  const totalValue = amountAfterDiscount * (1 + gstPercentage / 100);
 
   return (
     <div className={`rounded-lg shadow p-4 ${isSelected ? 'ring-2 ring-blue-500' : ''} ${product.isDuplicate ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-green-50 border-2 border-green-300'}`}>
@@ -997,19 +1007,17 @@ const ProductCard = React.memo(({ product, onUpdate, onDelete, isSelected, onTog
                 <span>Sell Rate:</span> <span className="font-medium text-blue-600">₹{product.selling_rate.toFixed(2)}</span>
               </div>
             )}
-            {(product.gst_percentage > 0 || product.discount > 0) && (
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Tax/Disc:</span>
-                <span>
-                  {product.gst_percentage > 0 && `GST ${product.gst_percentage}%`}
-                  {product.gst_percentage > 0 && product.discount > 0 && ' | '}
-                  {product.discount > 0 && `Disc ${product.discount}%`}
-                </span>
-              </div>
-            )}
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>GST:</span>
+              <span>{gstPercentage}%</span>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Discount:</span>
+              <span>{discountPercentage}%</span>
+            </div>
             <div className="flex justify-between border-t border-gray-200 mt-1 pt-1 col-span-2">
               <span>Total Value:</span>
-              <span className="font-bold text-gray-900">₹{(product.quantity * product.price).toFixed(2)}</span>
+              <span className="font-bold text-gray-900">₹{totalValue.toFixed(2)}</span>
             </div>
           </div>
 

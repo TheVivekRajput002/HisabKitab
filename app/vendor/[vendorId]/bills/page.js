@@ -33,6 +33,34 @@ function Badge({ children, variant = 'default', className = '' }) {
     return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>{children}</span>;
 }
 
+// Always recalculate from live fields: qty × rate × (1 - discount%) × (1 + gst%)
+const getBillItemTotal = (item) => {
+    const quantity = Number(item.quantity) || 0;
+    const rate = Number(item.purchase_rate) || 0;
+    const discount = Number(item.discount) || 0;
+    const gst = Number(item.gst_percentage) || 0;
+
+    if (quantity > 0 && rate >= 0) {
+        const base = quantity * rate;
+        const afterDiscount = base * (1 - discount / 100);
+        return afterDiscount * (1 + gst / 100);
+    }
+
+    return 0;
+};
+
+const toNumber = (value) => {
+    if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : 0;
+    }
+    if (value === null || value === undefined) {
+        return 0;
+    }
+    const cleaned = String(value).replace(/[^0-9.-]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 // ============================================================================
 // BILL CARD COMPONENT
 // ============================================================================
@@ -53,16 +81,30 @@ function BillCard({ bill, onViewDetails }) {
             const { data, error } = await supabase
                 .from('vendor_bill_items')
                 .select(`
-          *,
-          products (
-            product_name,
-            hsn_code
-          )
-        `)
+                    id,
+                    vendor_bill_id,
+                    product_id,
+                    quantity,
+                    purchase_rate,
+                    gst_percentage,
+                    discount,
+                    total_amount,
+                    products (
+                        product_name,
+                        hsn_code
+                    )
+                `)
                 .eq('vendor_bill_id', bill.id);
 
             if (error) throw error;
-            setItems(data || []);
+            setItems((data || []).map((item) => ({
+                ...item,
+                quantity: toNumber(item.quantity),
+                purchase_rate: toNumber(item.purchase_rate),
+                gst_percentage: toNumber(item.gst_percentage),
+                discount: toNumber(item.discount),
+                total_amount: toNumber(item.total_amount)
+            })));
         } catch (error) {
             console.error('Error fetching bill items:', error);
         } finally {
@@ -245,14 +287,14 @@ function BillCard({ bill, onViewDetails }) {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
-                                                    <span className="text-sm font-medium text-gray-800">{item.gst_percentage}%</span>
+                                                    <span className="text-sm font-medium text-blue-700">{item.gst_percentage}%</span>
                                                 </td>
                                                 <td className="px-4 py-3 text-center">
                                                     <span className="text-sm font-medium text-orange-600">{item.discount || 0}%</span>
                                                 </td>
                                                 <td className="px-4 py-3 text-right">
                                                     <span className="text-sm font-bold text-green-600">
-                                                        ₹{Number(item.total_amount).toFixed(2)}
+                                                        ₹{getBillItemTotal(item).toFixed(2)}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -270,7 +312,7 @@ function BillCard({ bill, onViewDetails }) {
                                 <div className="flex items-center justify-between mt-1">
                                     <span className="font-semibold text-gray-700">Grand Total:</span>
                                     <span className="font-bold text-green-600">
-                                        ₹{items.reduce((sum, item) => sum + Number(item.total_amount), 0).toFixed(2)}
+                                        ₹{items.reduce((sum, item) => sum + getBillItemTotal(item), 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                     </span>
                                 </div>
                             </div>
@@ -465,7 +507,7 @@ export default function VendorBillsPage() {
                         <FileText size={64} className="mx-auto mb-4 text-gray-300" />
                         <h3 className="text-xl font-semibold text-gray-800 mb-2">No bills yet</h3>
                         <p className="text-gray-600 mb-4">
-                            This vendor doesn't have any bills registered yet.
+                            This vendor does not have any bills registered yet.
                         </p>
                         <button
                             onClick={() => router.push('/vendor/scanner')}

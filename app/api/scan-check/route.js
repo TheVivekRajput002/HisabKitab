@@ -1,14 +1,9 @@
-import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from 'next/server';
+import { generateGeminiContentWithFailover } from '../_lib/geminiFailover';
 
 export async function POST(request) {
     try {
         const { imageBase64 } = await request.json();
-
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            return NextResponse.json({ error: 'API key not configured' }, { status: 500 });
-        }
 
         const prompt = `You are examining a bank cheque/check image. Extract all visible details from this cheque.
 
@@ -39,8 +34,7 @@ Rules:
 - "CRITICAL: Return ONLY valid JSON with NO spaces before colons. Format: \\"key\\":value not \\"key\\" :value"
 `;
 
-        const ai = new GoogleGenAI({ apiKey });
-        const response = await ai.models.generateContent({
+        const { response } = await generateGeminiContentWithFailover({
             model: 'gemini-2.5-flash',
             contents: [{
                 parts: [
