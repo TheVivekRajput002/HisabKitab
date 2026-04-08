@@ -366,18 +366,25 @@ const validationService = {
 
 const productService = {
   // Check if products already exist in database
-  checkDuplicates: async (products) => {
+  checkDuplicates: async (products, companyId) => {
 
     // Fetch all matching products in ONE query
     const productNames = products.map(p => p.name.trim());
-    const { data: existingProducts } = await supabase
+    let query = supabase
       .from('products')
       .select('id, product_name, current_stock, purchase_rate')
-      .in('product_name', productNames); // Single query!
+      .in('product_name', productNames);
+
+    // Filter by company_id if available
+    if (companyId) {
+      query = query.eq('company_id', companyId);
+    }
+
+    const { data: existingProducts } = await query;
 
     // Map results
     const productMap = new Map(
-      existingProducts.map(p => [p.product_name.toLowerCase(), p])
+      (existingProducts || []).map(p => [p.product_name.toLowerCase(), p])
     );
 
     return products.map(p => {
@@ -511,7 +518,8 @@ const productService = {
               hsn_code: p.hsn_code || '0000',
               brand: '',
               vehicle_model: '',
-              minimum_stock: 0
+              minimum_stock: 0,
+              company_id: companyId || null
             }))
           )
           .select('id, product_name');
@@ -1220,7 +1228,7 @@ export default function InvoiceScanner() {
       if (extractedData.products.length === 0) {
         setError('No products found. Try a clearer image.');
       } else {
-        const enrichedProducts = await productService.checkDuplicates(extractedData.products);
+        const enrichedProducts = await productService.checkDuplicates(extractedData.products, companyId);
         setProducts(enrichedProducts);
         setVendorData(extractedData.vendor);
         setInvoiceData(extractedData.invoice);
