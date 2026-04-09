@@ -11,6 +11,25 @@ const RETRYABLE_ERROR_HINTS = [
   'deadline',
   'internal'
 ];
+const HIGH_DEMAND_ERROR_HINTS = [
+  'high demand',
+  'spikes in demand',
+  'temporarily unavailable',
+  'currently experiencing high demand'
+];
+const MODEL_SELECTION_ERROR_HINTS = [
+  'model not found',
+  'unknown model',
+  'unsupported model',
+  'invalid model',
+  'not a valid model',
+  'is not found for api version'
+];
+const DEFAULT_LIGHT_MODEL_FALLBACKS = [
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
+  'gemini-2.0-flash'
+];
 
 export const getGeminiApiKeys = () => {
   const keyList = (process.env.GEMINI_API_KEYS || '')
@@ -27,6 +46,59 @@ export const getGeminiApiKeys = () => {
   }
 
   return [];
+};
+
+const getConfiguredFallbackModels = () =>
+  (process.env.GEMINI_FALLBACK_MODELS || '')
+    .split(',')
+    .map((modelName) => modelName.trim())
+    .filter(Boolean);
+
+const dedupeModelList = (models) => {
+  const seen = new Set();
+
+  return models.filter((modelName) => {
+    const key = String(modelName || '').trim();
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+};
+
+const isHighDemandGeminiError = (error) => {
+  const status =
+    error?.status ||
+    error?.code ||
+    error?.response?.status ||
+    error?.cause?.status;
+
+  if (Number(status) === 503) {
+    return true;
+  }
+
+  const message = String(
+    error?.message ||
+    error?.error ||
+    error?.cause?.message ||
+    ''
+  ).toLowerCase();
+
+  return HIGH_DEMAND_ERROR_HINTS.some((hint) => message.includes(hint));
+};
+
+const isModelSelectionError = (error) => {
+  const message = String(
+    error?.message ||
+    error?.error ||
+    error?.cause?.message ||
+    ''
+  ).toLowerCase();
+
+  return MODEL_SELECTION_ERROR_HINTS.some((hint) => message.includes(hint));
 };
 
 const isRetryableGeminiError = (error) => {
@@ -52,6 +124,7 @@ const isRetryableGeminiError = (error) => {
 
 export const generateGeminiContentWithFailover = async ({
   model,
+  fallbackModels,
   contents,
   config
 }) => {
@@ -62,23 +135,57 @@ export const generateGeminiContentWithFailover = async ({
   }
 
   let lastError = null;
+  const modelChain = dedupeModelList([
+    model,
+    ...(Array.isArray(fallbackModels) ? fallbackModels : []),
+    ...getConfiguredFallbackModels(),
+    ...DEFAULT_LIGHT_MODEL_FALLBACKS
+  ]);
 
-  for (let i = 0; i < apiKeys.length; i += 1) {
-    const apiKey = apiKeys[i];
+  for (let modelIndex = 0; modelIndex < modelChain.length; modelIndex += 1) {
+    const currentModel = modelChain[modelIndex];
 
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({ model, contents, config });
-      return { response, usedKeyIndex: i };
-    } catch (error) {
-      lastError = error;
-      const canRetry = i < apiKeys.length - 1 && isRetryableGeminiError(error);
+    for (let keyIndex = 0; keyIndex < apiKeys.length; keyIndex += 1) {
+      const apiKey = apiKeys[keyIndex];
 
-      if (!canRetry) {
-        break;
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+        const response = await ai.models.generateContent({
+          model: currentModel,
+          contents,
+          config
+        });
+
+        return { response, usedKeyIndex: keyIndex, usedModel: currentModel };
+      } catch (error) {
+        lastError = error;
+        const canRetryWithNextKey =
+          keyIndex < apiKeys.length - 1 && isRetryableGeminiError(error);
+
+        if (canRetryWithNextKey) {
+          console.warn(
+            `Gemini model "${currentModel}" with key index ${keyIndex} failed. Retrying with next key.`
+          );
+          continue;
+        }
+
+        const canRetryWithFallbackModel =
+          modelIndex < modelChain.length - 1 &&
+          (
+            isHighDemandGeminiError(error) ||
+            isRetryableGeminiError(error) ||
+            isModelSelectionError(error)
+          );
+
+        if (canRetryWithFallbackModel) {
+          console.warn(
+            `Gemini model "${currentModel}" failed (${error?.message || 'unknown error'}). Retrying with fallback model.`
+          );
+          break;
+        }
+
+        throw error;
       }
-
-      console.warn(`Gemini key index ${i} failed. Retrying with next key.`);
     }
   }
 

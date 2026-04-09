@@ -35,7 +35,8 @@ Rules:
 `;
 
         const { response } = await generateGeminiContentWithFailover({
-            model: 'gemini-2.5-flash',
+            model: 'gemma-4-31b-it',
+            fallbackModels: ['gemma-4-26b-a4b-it', 'gemini-2.5-flash'],
             contents: [{
                 parts: [
                     { text: prompt },
