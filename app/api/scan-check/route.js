@@ -14,6 +14,7 @@ You MUST return ONLY a valid JSON object (no markdown, no explanation) with this
   "cheque_number": "123456",
   "cheque_bank": "State Bank of India",
   "cheque_date": "2024-01-15",
+  "pay_name": "ABC Company",
   "payee_name": "ABC Company",
   "account_number": "1234567890",
   "ifsc_code": "SBIN0001234",
@@ -25,6 +26,7 @@ Rules:
 - "cheque_number" is the cheque serial number (usually printed at the bottom or top of the cheque)
 - "cheque_bank" is the name of the bank that issued the cheque
 - "cheque_date" must be in YYYY-MM-DD format
+- "pay_name" is who the cheque is made payable to (company name in the "Pay" line)
 - "payee_name" is who the cheque is made payable to (the "Pay" line)
 - "account_number" is the account number if visible
 - "ifsc_code" is the IFSC code if visible

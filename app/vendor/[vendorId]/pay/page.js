@@ -680,6 +680,7 @@ export default function VendorPayPage() {
         // CHEQUE
         cheque_number: '',
         cheque_bank: '',
+        company_name: '',
         cheque_date: new Date().toISOString().split('T')[0],
 
         // RTGS
@@ -759,6 +760,7 @@ export default function VendorPayPage() {
             amount: data.amount || prev.amount,
             cheque_number: data.cheque_number || prev.cheque_number,
             cheque_bank: data.cheque_bank || prev.cheque_bank,
+            company_name: data.pay_name || data.payee_name || prev.company_name,
             cheque_date: data.cheque_date || prev.cheque_date,
             payment_date: data.cheque_date || prev.payment_date,
             notes: data.notes || prev.notes
@@ -1120,6 +1122,10 @@ export default function VendorPayPage() {
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
                                             <input type="text" value={formData.cheque_bank} onChange={(e) => setFormData({ ...formData, cheque_bank: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" required placeholder="State Bank of India" />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name (Pay To)</label>
+                                            <input type="text" value={formData.company_name} onChange={(e) => setFormData({ ...formData, company_name: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Payee company name" />
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Cheque Date</label>
