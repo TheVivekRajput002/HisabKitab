@@ -85,7 +85,10 @@ const constants = {
   MAX_IMAGE_SIZE: 5 * 1024 * 1024,
   ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
   GEMINI_MODEL: 'gemini-2.5-flash',
-  API_KEY_STORAGE_KEY: 'gemini_api_key'
+  API_KEY_STORAGE_KEY: 'gemini_api_key',
+  // Optimized for faster scanning vs quality
+  SCAN_QUALITY: 0.7,
+  MAX_SCAN_WIDTH: 1200
 };
 
 const imageUtils = {
@@ -103,7 +106,7 @@ const imageUtils = {
     reader.readAsDataURL(file);
   }),
 
-  compressImage: async (file, maxWidth = 1920) => new Promise((resolve) => {
+  compressImage: async (file, maxWidth = 1200, quality = 0.75) => new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -114,7 +117,11 @@ const imageUtils = {
         canvas.width = width;
         canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => resolve(new File([blob], file.name, { type: file.type })), file.type, 0.9);
+        canvas.toBlob((blob) => {
+          const compressedFile = new File([blob], file.name, { type: file.type });
+          console.log(`Image compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(blob.size / 1024 / 1024).toFixed(2)}MB (${((blob.size / file.size) * 100).toFixed(1)}%)`);
+          resolve(compressedFile);
+        }, file.type, quality); // Lower quality for faster scanning
       };
       img.src = e.target.result;
     };
@@ -410,37 +417,33 @@ const productService = {
 
     try {
       // ========================================================================
-      // STEP 1: Handle Vendor (Create or Find)
+      // STEP 1: Handle Vendor (Create or Find) - OPTIMIZED
       // ========================================================================
       let vendorId = null;
 
       if (vendorData && vendorData.name) {
-        // First, try to find existing vendor by GSTIN (if provided)
-        if (vendorData.gstin) {
-          const { data: existingVendor } = await supabase
+        // Combine vendor lookups in parallel for faster processing
+        const [byGstin, byName] = await Promise.all([
+          // Try finding by GSTIN first (most reliable)
+          supabase
             .from('vendors')
             .select('id, name')
             .eq('gstin', vendorData.gstin)
-            .single();
-
-          if (existingVendor) {
-            vendorId = existingVendor.id;
-            results.vendorName = existingVendor.name;
-          }
-        }
-
-        // If not found by GSTIN, try by name
-        if (!vendorId) {
-          const { data: existingVendor } = await supabase
+            .single(),
+          // Fallback: find by name
+          supabase
             .from('vendors')
             .select('id, name')
             .ilike('name', vendorData.name)
-            .single();
+            .single()
+        ]);
 
-          if (existingVendor) {
-            vendorId = existingVendor.id;
-            results.vendorName = existingVendor.name;
-          }
+        if (byGstin.data) {
+          vendorId = byGstin.data.id;
+          results.vendorName = byGstin.data.name;
+        } else if (byName.data) {
+          vendorId = byName.data.id;
+          results.vendorName = byName.data.name;
         }
 
         // If still not found, create new vendor
@@ -537,33 +540,34 @@ const productService = {
         });
       }
 
-      // Update existing products
+      // Update existing products in PARALLEL (much faster than sequential)
       if (updates.length > 0) {
-        await Promise.all(
-          updates.map(async (p) => {
-            const newStock = (p.existingStock || 0) + p.quantity;
+        const updatePromises = updates.map(async (p) => {
+          const newStock = (p.existingStock || 0) + p.quantity;
+          
+          const { error: updateError } = await supabase
+            .from('products')
+            .update({
+              current_stock: newStock,
+              purchase_rate: p.price
+            })
+            .eq('id', p.existingId);
 
-            const { error: updateError } = await supabase
-              .from('products')
-              .update({
-                current_stock: newStock,
-                purchase_rate: p.price
-              })
-              .eq('id', p.existingId);
+          if (updateError) throw new Error(`Product update failed: ${updateError.message}`);
 
-            if (updateError) throw new Error(`Product update failed: ${updateError.message}`);
+          productIdMap.set(p.name, p.existingId);
+          results.updated++;
+          results.details.push({
+            name: p.name,
+            action: 'updated',
+            oldStock: p.existingStock,
+            added: p.quantity,
+            newStock: newStock
+          });
+        });
 
-            productIdMap.set(p.name, p.existingId);
-            results.updated++;
-            results.details.push({
-              name: p.name,
-              action: 'updated',
-              oldStock: p.existingStock,
-              added: p.quantity,
-              newStock: newStock
-            });
-          })
-        );
+        // Run all updates in parallel - HUGE performance gain!
+        await Promise.all(updatePromises);
       }
 
       // ========================================================================

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle, AlertCircle } from 'lucide-react';
 
 const CustomerDetailsForm = ({
@@ -17,6 +17,58 @@ const CustomerDetailsForm = ({
     onCustomerSelect,
     onDropdownToggle
 }) => {
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const dropdownItemRefs = useRef([]);
+
+    useEffect(() => {
+        if (!showCustomerDropdown || !customerSearchResults?.length) {
+            setHighlightedIndex(-1);
+        }
+    }, [showCustomerDropdown, customerSearchResults]);
+
+    useEffect(() => {
+        if (highlightedIndex >= 0 && dropdownItemRefs.current[highlightedIndex]) {
+            dropdownItemRefs.current[highlightedIndex].scrollIntoView({
+                block: 'nearest',
+                behavior: 'smooth'
+            });
+        }
+    }, [highlightedIndex]);
+
+    const handlePhoneKeyDown = (e) => {
+        if (showCustomerDropdown && customerSearchResults?.length > 0) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setHighlightedIndex(prev =>
+                    prev < customerSearchResults.length - 1 ? prev + 1 : 0
+                );
+                return;
+            }
+
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setHighlightedIndex(prev =>
+                    prev > 0 ? prev - 1 : customerSearchResults.length - 1
+                );
+                return;
+            }
+
+            if (e.key === 'Enter' && highlightedIndex >= 0) {
+                e.preventDefault();
+                onCustomerSelect(customerSearchResults[highlightedIndex]);
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                onDropdownToggle(false);
+                return;
+            }
+        }
+
+        onKeyDown(e, 'phoneNumber');
+    };
+
     return (
         <div className="p-6 border-b-2 border-gray-300 bg-blue-50">
             <div className="grid grid-cols-2 gap-4">
@@ -32,8 +84,15 @@ const CustomerDetailsForm = ({
                             onChange={(e) => {
                                 const value = e.target.value.replace(/\D/g, '').slice(0, 10);
                                 onCustomerChange('phoneNumber', value);
+                                setHighlightedIndex(-1);
                             }}
-                            onKeyDown={(e) => onKeyDown(e, 'phoneNumber')}
+                            onKeyDown={handlePhoneKeyDown}
+                            onBlur={() => setTimeout(() => onDropdownToggle(false), 200)}
+                            onFocus={() => {
+                                if (customerDetails.phoneNumber.length > 0) {
+                                    onDropdownToggle(true);
+                                }
+                            }}
                             className={`w-full px-4 py-2 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${phoneError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300'
                                 }`}
                             placeholder="10-digit phone number"
@@ -42,12 +101,17 @@ const CustomerDetailsForm = ({
 
                         {/* 🆕 Dropdown */}
                         {showCustomerDropdown && customerSearchResults && customerSearchResults.length > 0 && (
-                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                                {customerSearchResults.map((customer) => (
+                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto overflow-x-auto">
+                                {customerSearchResults.map((customer, idx) => (
                                     <div
                                         key={customer.id}
-                                        onClick={() => onCustomerSelect(customer)}
-                                        className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b last:border-b-0"
+                                        ref={(el) => dropdownItemRefs.current[idx] = el}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            onCustomerSelect(customer);
+                                        }}
+                                        onMouseEnter={() => setHighlightedIndex(idx)}
+                                        className={`px-4 py-3 cursor-pointer border-b last:border-b-0 transition-colors ${highlightedIndex === idx ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
                                     >
                                         <div className="font-medium text-gray-900">{customer.name}</div>
                                         <div className="text-sm text-gray-600">{customer.phone_number}</div>
