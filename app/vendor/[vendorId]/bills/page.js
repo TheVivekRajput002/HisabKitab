@@ -339,9 +339,8 @@ export default function VendorBillsPage() {
     const [error, setError] = useState(null);
     const [stats, setStats] = useState({
         total: 0,
-        paid: 0,
-        unpaid: 0,
-        partial: 0,
+        paidAmount: 0,
+        unpaidAmount: 0,
         totalAmount: 0
     });
 
@@ -373,15 +372,33 @@ export default function VendorBillsPage() {
                 .order('bill_date', { ascending: false });
 
             if (billsError) throw billsError;
-            setBills(billsData || []);
+            const billRows = billsData || [];
+            setBills(billRows);
+
+            // Fetch vendor-level payments (this app stores vendor ref in payments.customer_id)
+            const { data: paymentsData, error: paymentsError } = await supabase
+                .from('payments')
+                .select('amount')
+                .eq('customer_id', vendorId);
+
+            if (paymentsError) throw paymentsError;
+            const paymentRows = paymentsData || [];
 
             // Calculate stats
+            const totalAmount = billRows.reduce((sum, bill) => {
+                return sum + toNumber(bill.total_amount);
+            }, 0);
+
+            // Paid amount must come directly from payment ledger for this vendor.
+            const paidAmount = paymentRows.reduce((sum, payment) => {
+                return sum + toNumber(payment.amount);
+            }, 0);
+
             const billStats = {
-                total: billsData.length,
-                paid: billsData.filter(b => b.payment_status === 'paid').length,
-                unpaid: billsData.filter(b => b.payment_status === 'unpaid').length,
-                partial: billsData.filter(b => b.payment_status === 'partial').length,
-                totalAmount: billsData.reduce((sum, b) => sum + Number(b.total_amount), 0)
+                total: billRows.length,
+                paidAmount,
+                unpaidAmount: Math.max(totalAmount - paidAmount, 0),
+                totalAmount
             };
             setStats(billStats);
 
@@ -468,7 +485,9 @@ export default function VendorBillsPage() {
                                 <DollarSign className="text-green-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{stats.paid}</p>
+                                <p className="text-lg font-bold text-gray-800">
+                                    ₹{stats.paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
                                 <p className="text-sm text-gray-600">Paid</p>
                             </div>
                         </div>
@@ -480,7 +499,9 @@ export default function VendorBillsPage() {
                                 <AlertCircle className="text-red-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{stats.unpaid}</p>
+                                <p className="text-lg font-bold text-gray-800">
+                                    ₹{stats.unpaidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </p>
                                 <p className="text-sm text-gray-600">Unpaid</p>
                             </div>
                         </div>

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "hisabkitab_proxy_ts", "label": "proxy.ts", "file_type": "code", "source_file": "HisabKitab\\proxy.ts", "source_location": "L1"}], "edges": [{"source": "hisabkitab_proxy_ts", "target": "server", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "HisabKitab\\proxy.ts", "source_location": "L1", "weight": 1.0}]}

@@ -757,6 +757,7 @@ export default function VendorPayPage() {
     const handleCheckExtracted = (data, imageFile) => {
         setFormData(prev => ({
             ...prev,
+            payment_method: 'CHEQUE',
             amount: data.amount || prev.amount,
             cheque_number: data.cheque_number || prev.cheque_number,
             cheque_bank: data.cheque_bank || prev.cheque_bank,
@@ -770,6 +771,22 @@ export default function VendorPayPage() {
         setScanFilled(true);
         setTimeout(() => setScanFilled(false), 5000);
     };
+
+    useEffect(() => {
+        if (!vendorId) return;
+        try {
+            const raw = sessionStorage.getItem('vendor_pay_prefill');
+            if (!raw) return;
+            const payload = JSON.parse(raw);
+            if (String(payload?.vendorId) !== String(vendorId)) return;
+            if (payload?.data) {
+                handleCheckExtracted(payload.data);
+            }
+            sessionStorage.removeItem('vendor_pay_prefill');
+        } catch {
+            sessionStorage.removeItem('vendor_pay_prefill');
+        }
+    }, [vendorId]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();

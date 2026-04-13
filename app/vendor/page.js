@@ -416,6 +416,13 @@ export default function VendorPage() {
                             Register Vendor Bill
                         </button>
                         <button
+                            onClick={() => router.push('/vendor/pay')}
+                            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 justify-center"
+                        >
+                            <CreditCard size={20} />
+                            Pay to Vendor
+                        </button>
+                        <button
                             onClick={() => setShowForm(true)}
                             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 justify-center"
                         >
