@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server';
 import { generateGeminiContentWithFailover } from '../_lib/geminiFailover';
 
+const extractJsonObject = (text) => {
+  if (!text || typeof text !== 'string') return null;
+  const cleaned = text.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  return cleaned.slice(start, end + 1);
+};
+
+const isValidInvoiceJson = (text) => {
+  try {
+    const jsonStr = extractJsonObject(text);
+    if (!jsonStr) return false;
+    const parsed = JSON.parse(jsonStr);
+    return parsed && Array.isArray(parsed.products);
+  } catch {
+    return false;
+  }
+};
+
 // ==========================================================================
 // GROQ/GROK CODE - COMMENTED OUT (using Gemini instead)
 // ==========================================================================
@@ -202,18 +222,30 @@ Rules:
         `; // Your existing prompt
 
     const { response } = await generateGeminiContentWithFailover({
-      model: 'gemma-4-31b-it',
-      fallbackModels: ['gemma-4-26b-a4b-it', 'gemini-2.5-flash'],
+      model: 'gemini-2.5-pro',
+      fallbackModels: ['gemini-2.5-flash-lite', 'gemini-2.0-flash'],
       contents: [{
         parts: [
           { text: prompt },
           { inlineData: { mimeType: 'image/jpeg', data: imageBase64 } }
         ]
       }],
-      config: { temperature: 0.1, maxOutputTokens: 8192 }
+      config: { temperature: 0.1, maxOutputTokens: 4096, responseMimeType: 'application/json' }
     });
 
-    const rawText = typeof response.text === 'function' ? response.text() : response.text;
+    let rawText = typeof response.text === 'function' ? response.text() : response.text;
+
+    if (!isValidInvoiceJson(rawText)) {
+      const repairPrompt = `Fix this into valid JSON only. Return one JSON object with keys "vendor", "invoice", "products" where "products" is always an array. No markdown or explanation.\n\n${rawText}`;
+      const { response: repairedResponse } = await generateGeminiContentWithFailover({
+        model: 'gemini-2.5-pro',
+        fallbackModels: ['gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+        contents: [{ parts: [{ text: repairPrompt }] }],
+        config: { temperature: 0, maxOutputTokens: 4096, responseMimeType: 'application/json' }
+      });
+
+      rawText = typeof repairedResponse.text === 'function' ? repairedResponse.text() : repairedResponse.text;
+    }
 
     // Return raw response for client-side parsing
     return NextResponse.json({ rawText });

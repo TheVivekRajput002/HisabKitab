@@ -41,41 +41,110 @@ function Badge({ children, variant = 'default', className = '' }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>{children}</span>;
 }
 
-// Progress Steps Component
-function ProgressSteps({ currentStep }) {
-  const steps = [
-    { id: 1, name: 'Upload', icon: Upload },
-    { id: 2, name: 'Scanning', icon: Camera },
-    { id: 3, name: 'Review', icon: Edit2 },
-    { id: 4, name: 'Done', icon: Check }
-  ];
+function useProgressBar({ stopAt = 95, rampDuration = 12000 } = {}) {
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState('idle');
+  const rafRef = useRef(null);
+  const startTimeRef = useRef(null);
+
+  const cancelRaf = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const start = useCallback(() => {
+    cancelRaf();
+    setProgress(0);
+    setPhase('running');
+    startTimeRef.current = performance.now();
+
+    const tick = (now) => {
+      const elapsed = now - startTimeRef.current;
+      const raw = elapsed / rampDuration;
+      const eased = 1 - Math.pow(1 - Math.min(raw, 1), 3);
+      const pct = eased * stopAt;
+      setProgress(Math.min(pct, stopAt));
+      if (pct < stopAt) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+  }, [cancelRaf, rampDuration, stopAt]);
+
+  const complete = useCallback(() => {
+    cancelRaf();
+    setPhase('completing');
+    setProgress(100);
+    setTimeout(() => setPhase('done'), 600);
+  }, [cancelRaf]);
+
+  const reset = useCallback(() => {
+    cancelRaf();
+    setProgress(0);
+    setPhase('idle');
+  }, [cancelRaf]);
+
+  useEffect(() => () => cancelRaf(), [cancelRaf]);
+
+  return {
+    progress,
+    phase,
+    isDone: phase === 'done',
+    isRunning: phase === 'running' || phase === 'completing',
+    start,
+    complete,
+    reset
+  };
+}
+
+function AnimatedDots() {
+  const [dots, setDots] = useState('.');
+
+  useEffect(() => {
+    const id = setInterval(() => setDots((d) => (d.length >= 3 ? '.' : `${d}.`)), 400);
+    return () => clearInterval(id);
+  }, []);
+
+  return <span className="inline-block w-4">{dots}</span>;
+}
+
+function ScanProgressBar({ bar }) {
+  const labelMap = {
+    idle: 'Awaiting scan',
+    running: 'Analysing',
+    completing: 'Finalising',
+    done: 'Complete'
+  };
+
+  const label = labelMap[bar.phase] || '';
+  const isActive = bar.isRunning;
+  const isDone = bar.isDone;
 
   return (
-    <div className="flex items-center justify-between mb-6 bg-white rounded-lg shadow p-4">
-      {steps.map((step, index) => {
-        const Icon = step.icon;
-        const isActive = currentStep === step.id;
-        const isCompleted = currentStep > step.id;
-        return (
-          <React.Fragment key={step.id}>
-            <div className="flex flex-col items-center">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isCompleted ? 'bg-green-500 text-white' :
-                isActive ? 'bg-blue-600 text-white' :
-                  'bg-gray-200 text-gray-500'
-                }`}>
-                {isCompleted ? <Check size={20} /> : <Icon size={20} />}
-              </div>
-              <span className={`text-xs mt-1 ${isActive ? 'font-semibold text-blue-600' : 'text-gray-500'}`}>{step.name}</span>
-            </div>
-            {index < steps.length - 1 && (
-              <div className={`flex-1 h-1 mx-2 rounded ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} />
-            )}
-          </React.Fragment>
-        );
-      })}
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className={`text-xs uppercase tracking-wider ${isDone ? 'text-emerald-600' : 'text-gray-500'}`}>
+          {label}{isActive && <AnimatedDots />}
+        </span>
+        <span className={`text-xs tabular-nums ${isDone ? 'text-emerald-600' : 'text-gray-500'}`}>
+          {Math.round(bar.progress)}%
+        </span>
+      </div>
+
+      <div className="h-2 w-full overflow-hidden rounded bg-gray-200">
+        <div
+          className={`h-full rounded bg-gradient-to-r from-emerald-300 to-emerald-500 ${isActive || isDone ? 'shadow-[0_0_12px_rgba(16,185,129,0.35)]' : ''}`}
+          style={{
+            width: `${bar.progress}%`,
+            transition: bar.phase === 'completing' ? 'width 550ms cubic-bezier(0.22,1,0.36,1)' : 'width 80ms linear'
+          }}
+        />
+      </div>
     </div>
   );
 }
+
 
 // ============================================================================
 // UTILITY FUNCTIONS & CONSTANTS
@@ -1172,6 +1241,7 @@ export default function InvoiceScanner() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState(null);
+  const scanProgressBar = useProgressBar({ stopAt: 95, rampDuration: 12000 });
 
   // qr code data 
   const payload = JSON.stringify({
@@ -1222,6 +1292,8 @@ export default function InvoiceScanner() {
   const handleScan = async () => {
     if (!image) { setError('Please upload an image'); return; }
 
+    scanProgressBar.reset();
+    scanProgressBar.start();
     setIsProcessing(true);
     setError(null);
 
@@ -1250,7 +1322,8 @@ export default function InvoiceScanner() {
         setError(`❌ Error: ${err.message}`);
       }
     } finally {
-      setIsProcessing(false);
+      scanProgressBar.complete();
+      setTimeout(() => setIsProcessing(false), 600);
     }
   };
 
@@ -1369,13 +1442,17 @@ export default function InvoiceScanner() {
             />
 
             {imagePreview && products.length === 0 && (
-              <button
-                onClick={handleScan}
-                disabled={isProcessing}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center justify-center gap-2"
-              >
-                {isProcessing ? <><Loader2 className="animate-spin" size={20} /> Scanning...</> : <><Camera size={20} /> Scan Invoice</>}
-              </button>
+              <>
+                <button
+                  onClick={handleScan}
+                  disabled={isProcessing}
+                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? 'Scanning...' : <><Camera size={20} /> Scan Invoice</>}
+                </button>
+
+                {isProcessing && <ScanProgressBar bar={scanProgressBar} />}
+              </>
             )}
           </div>
 
