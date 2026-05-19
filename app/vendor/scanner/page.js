@@ -229,22 +229,40 @@ const imageUtils = {
 // IMAGE UPLOAD WITH CAMERA CAPTURE
 // ============================================================================
 
-function ImageUpload({ onImageSelect, isProcessing, imagePreview, onCropClick }) {
+function ImageUpload({ onImageSelect, onUploadError, isProcessing, imagePreview, onCropClick }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
   const handleFileChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const validation = imageUtils.validateImage(file);
-    if (!validation.valid) { alert(validation.error); return; }
     try {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const validation = imageUtils.validateImage(file);
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
       const compressedFile = await imageUtils.compressImage(file);
       onImageSelect(compressedFile);
     } catch (err) {
-      console.warn('Compression failed, using original file:', err?.message || err);
-      alert(err?.message || 'Image processing failed. Using original image.');
-      onImageSelect(file);
+      const rawFile = e.target.files?.[0];
+      const baseError = err?.message || 'Unknown upload error';
+      const details = rawFile
+        ? `File: ${rawFile.name} | Type: ${rawFile.type || 'unknown'} | Size: ${(rawFile.size / 1024 / 1024).toFixed(2)}MB`
+        : 'No file metadata available';
+
+      console.error('Image upload pipeline failed:', { error: baseError, details });
+      onUploadError?.(`${baseError}. ${details}`);
+
+      if (rawFile) {
+        try {
+          onImageSelect(rawFile);
+          onUploadError?.(`Compressed upload failed; using original image. ${details}`);
+        } catch (fallbackErr) {
+          onUploadError?.(`Original image fallback failed: ${fallbackErr?.message || 'Unknown error'}. ${details}`);
+        }
+      }
     }
   };
 
@@ -1296,6 +1314,9 @@ export default function InvoiceScanner() {
     }
     setImage(file);
     const reader = new FileReader();
+    reader.onerror = () => {
+      setError(`Failed to preview selected image. File: ${file.name} | Type: ${file.type || 'unknown'}`);
+    };
     reader.onload = (e) => setImagePreview(e.target.result);
     reader.readAsDataURL(file);
   }, []);
@@ -1460,6 +1481,7 @@ export default function InvoiceScanner() {
           <div className="space-y-4">
             <ImageUpload
               onImageSelect={handleImageSelect}
+              onUploadError={setError}
               isProcessing={isProcessing}
               imagePreview={imagePreview}
               onCropClick={() => setShowCropper(true)}
