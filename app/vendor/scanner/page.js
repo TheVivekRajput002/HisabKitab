@@ -185,19 +185,13 @@ const imageUtils = {
       clearTimeout(timeoutId);
       reject(new Error('Failed to read image file.'));
     };
-    reader.onload = (e) => {
-      const img = new Image();
-      img.onerror = () => {
-        clearTimeout(timeoutId);
-        reject(new Error('Failed to decode image. Please use a JPG/PNG image.'));
-      };
-      img.onload = () => {
+    reader.onload = async (e) => {
+      const renderToCanvas = (source, width, height) => {
         const canvas = document.createElement('canvas');
-        let width = img.width, height = img.height;
         if (width > maxWidth) { height = (height * maxWidth) / width; width = maxWidth; }
         canvas.width = width;
         canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        canvas.getContext('2d').drawImage(source, 0, 0, width, height);
         canvas.toBlob((blob) => {
           clearTimeout(timeoutId);
           if (!blob) {
@@ -208,6 +202,25 @@ const imageUtils = {
           console.log(`Image compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(blob.size / 1024 / 1024).toFixed(2)}MB (${((blob.size / file.size) * 100).toFixed(1)}%)`);
           resolve(compressedFile);
         }, 'image/jpeg', quality); // Lower quality for faster scanning and wider compatibility
+      };
+
+      try {
+        if (typeof createImageBitmap === 'function') {
+          const bitmap = await createImageBitmap(file);
+          renderToCanvas(bitmap, bitmap.width, bitmap.height);
+          return;
+        }
+      } catch {
+        // Fall back to HTMLImageElement path for devices that don't support bitmap decoding.
+      }
+
+      const img = new Image();
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Failed to decode image on this device.'));
+      };
+      img.onload = () => {
+        renderToCanvas(img, img.width, img.height);
       };
       img.src = e.target.result;
     };
@@ -258,7 +271,7 @@ function ImageUpload({ onImageSelect, onUploadError, isProcessing, imagePreview,
       if (rawFile) {
         try {
           onImageSelect(rawFile);
-          onUploadError?.(`Compressed upload failed; using original image. ${details}`);
+          onUploadError?.(null);
         } catch (fallbackErr) {
           onUploadError?.(`Original image fallback failed: ${fallbackErr?.message || 'Unknown error'}. ${details}`);
         }
