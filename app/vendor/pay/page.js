@@ -1,16 +1,181 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ScanLine, Loader2, Search, CreditCard, Upload, X, Building2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { ArrowLeft, ScanLine, Loader2, Search, CreditCard, Upload, X, Building2, Crop, PenSquare, Camera } from "lucide-react";
+import "react-image-crop/dist/ReactCrop.css";
 import { supabase } from "@/utils/supabaseClient";
 import { useCompany } from "@/hooks/useCompany";
+
+const ReactCrop = dynamic(() => import("react-image-crop"), {
+    ssr: false,
+    loading: () => <div className="flex items-center justify-center h-64"><Loader2 className="animate-spin" size={28} /></div>
+});
+
+function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
+    const [crop, setCrop] = useState({ unit: "%", width: 90, height: 90, x: 5, y: 5 });
+    const [completedCrop, setCompletedCrop] = useState(null);
+    const imgRef = useRef(null);
+
+    const getCroppedImage = (image, cropData, fileName) => new Promise((resolve, reject) => {
+        const canvas = document.createElement("canvas");
+        const scaleX = image.naturalWidth / image.width;
+        const scaleY = image.naturalHeight / image.height;
+        canvas.width = cropData.width * scaleX;
+        canvas.height = cropData.height * scaleY;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(
+            image,
+            cropData.x * scaleX, cropData.y * scaleY,
+            cropData.width * scaleX, cropData.height * scaleY,
+            0, 0, cropData.width * scaleX, cropData.height * scaleY
+        );
+        canvas.toBlob((blob) => {
+            if (!blob) return reject(new Error("Crop failed"));
+            resolve(new File([blob], fileName || "cropped-check.jpg", { type: "image/jpeg" }));
+        }, "image/jpeg", 0.95);
+    });
+
+    const handleApply = async () => {
+        if (!completedCrop || !imgRef.current) return onCancel();
+        try {
+            const cropped = await getCroppedImage(imgRef.current, completedCrop, "cropped-check.jpg");
+            onCropComplete(cropped);
+        } catch {
+            onCancel();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-4xl overflow-hidden">
+                <div className="p-4 border-b font-semibold">Crop Check Image</div>
+                <div className="p-4 max-h-[70vh] overflow-auto bg-gray-100 flex items-center justify-center">
+                    <ReactCrop crop={crop} onChange={(c) => setCrop(c)} onComplete={(c) => setCompletedCrop(c)}>
+                        <img ref={imgRef} src={imageSrc} alt="Crop preview" className="max-h-[65vh] max-w-full" />
+                    </ReactCrop>
+                </div>
+                <div className="p-4 border-t flex gap-2">
+                    <button onClick={onCancel} className="flex-1 border rounded-lg py-2 hover:bg-gray-50">Cancel</button>
+                    <button onClick={handleApply} className="flex-1 bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700">Apply Crop</button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ImageMarker({ imageSrc, onDone, onCancel }) {
+    const canvasRef = useRef(null);
+    const imgRef = useRef(null);
+    const [drawing, setDrawing] = useState(false);
+    const [lines, setLines] = useState([]);
+
+    const getPos = (e) => {
+        const canvas = canvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+        const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+        return { x, y };
+    };
+
+    const redraw = (currentLines) => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) return;
+        const ctx = canvas.getContext("2d");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = "#ef4444";
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        currentLines.forEach((line) => {
+            if (!line.length) return;
+            ctx.beginPath();
+            ctx.moveTo(line[0].x, line[0].y);
+            line.slice(1).forEach((p) => ctx.lineTo(p.x, p.y));
+            ctx.stroke();
+        });
+    };
+
+    const handleImageLoad = () => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) return;
+        const maxW = 900;
+        const ratio = Math.min(1, maxW / img.naturalWidth);
+        canvas.width = img.naturalWidth * ratio;
+        canvas.height = img.naturalHeight * ratio;
+        redraw(lines);
+    };
+
+    const start = (e) => {
+        e.preventDefault();
+        const p = getPos(e);
+        setDrawing(true);
+        setLines((prev) => [...prev, [p]]);
+    };
+
+    const move = (e) => {
+        if (!drawing) return;
+        e.preventDefault();
+        const p = getPos(e);
+        setLines((prev) => {
+            const next = [...prev];
+            next[next.length - 1] = [...next[next.length - 1], p];
+            redraw(next);
+            return next;
+        });
+    };
+
+    const end = () => setDrawing(false);
+
+    const handleDone = () => {
+        const canvas = canvasRef.current;
+        canvas.toBlob((blob) => {
+            if (!blob) return;
+            onDone(new File([blob], "marked-check.jpg", { type: "image/jpeg" }));
+        }, "image/jpeg", 0.95);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl w-full max-w-5xl overflow-hidden">
+                <div className="p-4 border-b font-semibold">Mark Check Image</div>
+                <div className="p-4 bg-gray-100 max-h-[70vh] overflow-auto flex justify-center">
+                    <div className="relative">
+                        <img ref={imgRef} src={imageSrc} alt="Mark" onLoad={handleImageLoad} className="hidden" />
+                        <canvas
+                            ref={canvasRef}
+                            className="border rounded bg-white touch-none"
+                            onMouseDown={start}
+                            onMouseMove={move}
+                            onMouseUp={end}
+                            onMouseLeave={end}
+                            onTouchStart={start}
+                            onTouchMove={move}
+                            onTouchEnd={end}
+                        />
+                    </div>
+                </div>
+                <div className="p-4 border-t flex gap-2">
+                    <button onClick={onCancel} className="flex-1 border rounded-lg py-2 hover:bg-gray-50">Cancel</button>
+                    <button onClick={() => { setLines([]); redraw([]); }} className="flex-1 border rounded-lg py-2 hover:bg-gray-50">Clear</button>
+                    <button onClick={handleDone} className="flex-1 bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700">Apply Marks</button>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function CheckScannerModal({ onExtracted, onClose }) {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [scanning, setScanning] = useState(false);
     const [error, setError] = useState(null);
+    const [showCropper, setShowCropper] = useState(false);
+    const [showMarker, setShowMarker] = useState(false);
+    const cameraInputRef = useRef(null);
 
     const handleFileChange = async (e) => {
         const file = e.target.files?.[0];
@@ -95,15 +260,44 @@ function CheckScannerModal({ onExtracted, onClose }) {
                     {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{error}</div>}
 
                     {!imagePreview ? (
-                        <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all">
-                            <Upload className="w-10 h-10 text-gray-400 mb-2" />
-                            <p className="text-sm text-gray-500">Upload check image</p>
-                            <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP (MAX 5MB)</p>
-                            <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={scanning} />
-                        </label>
+                        <div className="space-y-3">
+                            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all">
+                                <Upload className="w-10 h-10 text-gray-400 mb-2" />
+                                <p className="text-sm text-gray-500">Upload check image</p>
+                                <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP (MAX 5MB)</p>
+                                <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={scanning} />
+                            </label>
+                            <button
+                                onClick={() => cameraInputRef.current?.click()}
+                                className="w-full px-4 py-2.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center justify-center gap-2"
+                                disabled={scanning}
+                            >
+                                <Camera size={18} />
+                                Take Photo
+                            </button>
+                            <input
+                                ref={cameraInputRef}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={handleFileChange}
+                                disabled={scanning}
+                            />
+                        </div>
                     ) : (
                         <div className="space-y-3">
-                            <img src={imagePreview} alt="Check preview" className="w-full max-h-72 object-contain bg-gray-50 rounded-lg border" />
+                            <div className="relative">
+                                <img src={imagePreview} alt="Check preview" className="w-full max-h-72 object-contain bg-gray-50 rounded-lg border" />
+                                <div className="absolute top-2 right-2 flex gap-2">
+                                    <button onClick={() => setShowCropper(true)} className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600" title="Crop">
+                                        <Crop size={16} />
+                                    </button>
+                                    <button onClick={() => setShowMarker(true)} className="p-2 bg-rose-500 text-white rounded-full hover:bg-rose-600" title="Mark">
+                                        <PenSquare size={16} />
+                                    </button>
+                                </div>
+                            </div>
                             <button
                                 onClick={handleScan}
                                 disabled={scanning}
@@ -116,6 +310,34 @@ function CheckScannerModal({ onExtracted, onClose }) {
                     )}
                 </div>
             </div>
+
+            {showCropper && imagePreview && (
+                <ImageCropper
+                    imageSrc={imagePreview}
+                    onCancel={() => setShowCropper(false)}
+                    onCropComplete={(file) => {
+                        setImageFile(file);
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setImagePreview(ev.target.result);
+                        reader.readAsDataURL(file);
+                        setShowCropper(false);
+                    }}
+                />
+            )}
+
+            {showMarker && imagePreview && (
+                <ImageMarker
+                    imageSrc={imagePreview}
+                    onCancel={() => setShowMarker(false)}
+                    onDone={(file) => {
+                        setImageFile(file);
+                        const reader = new FileReader();
+                        reader.onload = (ev) => setImagePreview(ev.target.result);
+                        reader.readAsDataURL(file);
+                        setShowMarker(false);
+                    }}
+                />
+            )}
         </div>
     );
 }
