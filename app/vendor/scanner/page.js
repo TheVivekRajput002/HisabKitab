@@ -151,8 +151,8 @@ function ScanProgressBar({ bar }) {
 // ============================================================================
 
 const constants = {
-  MAX_IMAGE_SIZE: 5 * 1024 * 1024,
-  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+  MAX_IMAGE_SIZE: 15 * 1024 * 1024,
+  ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
   GEMINI_MODEL: 'gemini-2.5-flash',
   API_KEY_STORAGE_KEY: 'gemini_api_key',
   // Optimized for faster scanning vs quality
@@ -163,8 +163,8 @@ const constants = {
 const imageUtils = {
   validateImage: (file) => {
     if (!file) return { valid: false, error: 'No file selected' };
-    if (!constants.ALLOWED_IMAGE_TYPES.includes(file.type)) return { valid: false, error: 'Invalid file type. Please upload JPG, PNG, or WEBP.' };
-    if (file.size > constants.MAX_IMAGE_SIZE) return { valid: false, error: 'File size exceeds 5MB limit.' };
+    if (!constants.ALLOWED_IMAGE_TYPES.includes(file.type)) return { valid: false, error: 'Invalid file type. Please upload JPG, PNG, WEBP, HEIC, or HEIF.' };
+    if (file.size > constants.MAX_IMAGE_SIZE) return { valid: false, error: 'File size exceeds 15MB limit.' };
     return { valid: true };
   },
 
@@ -187,10 +187,10 @@ const imageUtils = {
         canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
-          const compressedFile = new File([blob], file.name, { type: file.type });
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
           console.log(`Image compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(blob.size / 1024 / 1024).toFixed(2)}MB (${((blob.size / file.size) * 100).toFixed(1)}%)`);
           resolve(compressedFile);
-        }, file.type, quality); // Lower quality for faster scanning
+        }, 'image/jpeg', quality); // Lower quality for faster scanning and wider compatibility
       };
       img.src = e.target.result;
     };
@@ -233,7 +233,7 @@ function ImageUpload({ onImageSelect, isProcessing, imagePreview, onCropClick })
           <label className="flex flex-col items-center justify-center w-full h-120 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 transition-colors">
             <Upload className="w-10 h-10 text-gray-400 mb-2" />
             <p className="text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-            <p className="text-xs text-gray-400">PNG, JPG, WEBP (MAX. 5MB)</p>
+            <p className="text-xs text-gray-400">PNG, JPG, WEBP, HEIC (MAX. 15MB)</p>
             <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={isProcessing} />
           </label>
 
