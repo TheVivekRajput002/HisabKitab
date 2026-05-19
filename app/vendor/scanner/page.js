@@ -1273,6 +1273,7 @@ function ConfirmationModal({ products, onConfirm, onCancel, isProcessing }) {
 export default function InvoiceScanner() {
   const router = useRouter();
   const { companyId } = useCompany();
+  const previewUrlRef = useRef(null);
   const [image, setImage] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [products, setProducts] = useState([]);
@@ -1304,6 +1305,10 @@ export default function InvoiceScanner() {
 
   const handleImageSelect = useCallback((file) => {
     if (!file) {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = null;
+      }
       setImage(null);
       setImagePreview(null);
       setProducts([]);
@@ -1312,13 +1317,29 @@ export default function InvoiceScanner() {
       setError(null);
       return;
     }
+
+    if (previewUrlRef.current) {
+      URL.revokeObjectURL(previewUrlRef.current);
+      previewUrlRef.current = null;
+    }
+
     setImage(file);
-    const reader = new FileReader();
-    reader.onerror = () => {
+    try {
+      const objectUrl = URL.createObjectURL(file);
+      previewUrlRef.current = objectUrl;
+      setImagePreview(objectUrl);
+      setError(null);
+    } catch {
       setError(`Failed to preview selected image. File: ${file.name} | Type: ${file.type || 'unknown'}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrlRef.current) {
+        URL.revokeObjectURL(previewUrlRef.current);
+      }
     };
-    reader.onload = (e) => setImagePreview(e.target.result);
-    reader.readAsDataURL(file);
   }, []);
 
   const handleUpdateProduct = useCallback((id, data) => {
