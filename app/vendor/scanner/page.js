@@ -175,10 +175,22 @@ const imageUtils = {
     reader.readAsDataURL(file);
   }),
 
-  compressImage: async (file, maxWidth = 1200, quality = 0.75) => new Promise((resolve) => {
+  compressImage: async (file, maxWidth = 1200, quality = 0.75) => new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Image processing timed out. Please try another image.'));
+    }, 15000);
+
     const reader = new FileReader();
+    reader.onerror = () => {
+      clearTimeout(timeoutId);
+      reject(new Error('Failed to read image file.'));
+    };
     reader.onload = (e) => {
       const img = new Image();
+      img.onerror = () => {
+        clearTimeout(timeoutId);
+        reject(new Error('Failed to decode image. Please use a JPG/PNG image.'));
+      };
       img.onload = () => {
         const canvas = document.createElement('canvas');
         let width = img.width, height = img.height;
@@ -187,6 +199,11 @@ const imageUtils = {
         canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
+          clearTimeout(timeoutId);
+          if (!blob) {
+            reject(new Error('Failed to process image.'));
+            return;
+          }
           const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
           console.log(`Image compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(blob.size / 1024 / 1024).toFixed(2)}MB (${((blob.size / file.size) * 100).toFixed(1)}%)`);
           resolve(compressedFile);
@@ -221,8 +238,14 @@ function ImageUpload({ onImageSelect, isProcessing, imagePreview, onCropClick })
     if (!file) return;
     const validation = imageUtils.validateImage(file);
     if (!validation.valid) { alert(validation.error); return; }
-    const compressedFile = await imageUtils.compressImage(file);
-    onImageSelect(compressedFile);
+    try {
+      const compressedFile = await imageUtils.compressImage(file);
+      onImageSelect(compressedFile);
+    } catch (err) {
+      console.warn('Compression failed, using original file:', err?.message || err);
+      alert(err?.message || 'Image processing failed. Using original image.');
+      onImageSelect(file);
+    }
   };
 
   return (
@@ -234,7 +257,7 @@ function ImageUpload({ onImageSelect, isProcessing, imagePreview, onCropClick })
             <Upload className="w-10 h-10 text-gray-400 mb-2" />
             <p className="text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
             <p className="text-xs text-gray-400">PNG, JPG, WEBP, HEIC (MAX. 15MB)</p>
-            <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={isProcessing} />
+            <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onClick={(e) => { e.currentTarget.value = null; }} onChange={handleFileChange} disabled={isProcessing} />
           </label>
 
           {/* Camera Capture Button (Mobile) */}
@@ -253,6 +276,7 @@ function ImageUpload({ onImageSelect, isProcessing, imagePreview, onCropClick })
               accept="image/*"
               capture="environment"
               className="hidden"
+              onClick={(e) => { e.currentTarget.value = null; }}
               onChange={handleFileChange}
               disabled={isProcessing}
             />
