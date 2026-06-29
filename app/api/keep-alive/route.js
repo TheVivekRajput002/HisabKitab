@@ -22,3 +22,14 @@ export async function GET() {
     }, { status: 500 });
   }
 }
+
+// UptimeRobot uses HEAD requests by default. We need to export a HEAD handler
+// so it doesn't get a 405 Method Not Allowed error. It must also ping Supabase!
+export async function HEAD() {
+  try {
+    await supabase.from('keep_alive').select('*').limit(1);
+    return new NextResponse(null, { status: 200 });
+  } catch (error) {
+    return new NextResponse(null, { status: 500 });
+  }
+}
