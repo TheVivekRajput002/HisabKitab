@@ -1,12 +1,19 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)', '/api/keep-alive(.*)'])
 
-export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect()
+export default function middleware(request: any, event: any) {
+  if (request.nextUrl.pathname.startsWith('/api/keep-alive')) {
+    return NextResponse.next();
   }
-})
+  
+  return clerkMiddleware(async (auth, req) => {
+    if (!isPublicRoute(req)) {
+      await auth.protect()
+    }
+  })(request, event);
+}
 
 export const config = {
   matcher: [
