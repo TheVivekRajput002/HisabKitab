@@ -21,7 +21,7 @@ export const useCustomerSearch = (phoneNumber, companyId) => {
             try {
                 let query = supabase
                     .from('customers')
-                    .select('id, name, phone_number, address, vehicle, gstin')
+                    .select('id, name, phone_number, address, gstin, vehicles(id, vehicle_number)')
                     .ilike('phone_number', `${phoneNumber}%`)
                     .order('created_at', { ascending: false })
                     .limit(10);

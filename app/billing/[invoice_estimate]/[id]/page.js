@@ -476,8 +476,8 @@ const InvoiceViewEdit = () => {
                             </div>
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-1">Vehicle Number</label>
-                                <div className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-gray-900">
-                                    {customer?.vehicle || 'N/A'}
+                                <div className="px-4 py-2 bg-white border-2 border-gray-200 rounded-lg text-gray-900 uppercase font-semibold">
+                                    {invoice?.vehicle_number || customer?.vehicle || 'N/A'}
                                 </div>
                             </div>
                             {invoice.gstin && (

@@ -115,8 +115,10 @@ const CustomerDetailsForm = ({
                                     >
                                         <div className="font-medium text-gray-900">{customer.name}</div>
                                         <div className="text-sm text-gray-600">{customer.phone_number}</div>
-                                        {customer.vehicle && (
-                                            <div className="text-xs text-gray-500">{customer.vehicle}</div>
+                                        {customer.vehicles && customer.vehicles.length > 0 && (
+                                            <div className="text-xs text-gray-500">
+                                                Vehicles: {customer.vehicles.map(v => v.vehicle_number).join(', ')}
+                                            </div>
                                         )}
                                     </div>
                                 ))}
@@ -190,9 +192,27 @@ const CustomerDetailsForm = ({
                         value={customerDetails.vehicle}
                         onChange={(e) => onCustomerChange('vehicle', e.target.value)}
                         onKeyDown={(e) => onKeyDown(e, 'vehicle')}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase placeholder:normal-case font-semibold"
                         placeholder="Vehicle number"
                     />
+                    {customerDetails.vehicles && customerDetails.vehicles.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                            {customerDetails.vehicles.map((v) => (
+                                <button
+                                    key={v.id}
+                                    type="button"
+                                    onClick={() => onCustomerChange('vehicle', v.vehicle_number)}
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-all font-semibold ${
+                                        customerDetails.vehicle?.toUpperCase() === v.vehicle_number?.toUpperCase()
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                                            : 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-700'
+                                    }`}
+                                >
+                                    {v.vehicle_number}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="md:col-span-2">

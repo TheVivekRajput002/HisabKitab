@@ -178,7 +178,7 @@ const InvoicePDF = ({ isInvoice, pageHead, invoice, customer, products, gstInclu
                             <View style={styles.customerColumn}>
                                 <Text style={styles.customerTextLine}>
                                     <Text style={styles.customerLabel}>Vehicle / Mechanic: </Text>
-                                    <Text style={styles.customerValue}>{customer?.vehicle || 'N/A'}</Text>
+                                    <Text style={styles.customerValue}>{invoice?.vehicle_number || customer?.vehicle || 'N/A'}</Text>
                                 </Text>
                                 <Text style={styles.customerTextLine}>
                                     <Text style={styles.customerLabel}>Address: </Text>

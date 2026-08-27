@@ -59,16 +59,18 @@ const EstimateSearch = () => {
     const debouncedPhone = useDebounce(phoneNumber, 300);
 
     useEffect(() => {
+        if (!companyId) return;
         fetchEstimates();
-    }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, currentPage, sortBy]);
+    }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, currentPage, sortBy, companyId]);
 
     useEffect(() => {
         setCurrentPage(1);
     }, [debouncedSearch, debouncedCustomer, debouncedPhone, filters.paymentStatus, filters.dateFrom, filters.dateTo, sortBy]);
 
     useEffect(() => {
+        if (!companyId) return;
         fetchUnpaidAmount();
-    }, []);
+    }, [companyId]);
 
     const fetchEstimates = async () => {
         setLoading(true);
@@ -148,6 +150,7 @@ const EstimateSearch = () => {
     };
 
     const fetchUnpaidAmount = async () => {
+        if (!companyId) return;
         try {
             const { data } = await supabase
                 .from('estimate')

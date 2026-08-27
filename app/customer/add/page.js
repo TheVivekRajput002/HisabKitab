@@ -84,7 +84,7 @@ const AddCustomer = () => {
                     name: formData.name.trim(),
                     phone_number: formData.phone_number.trim(),
                     address: formData.address.trim() || null,
-                    vehicle: formData.vehicle.trim() || null,
+                    vehicle: null,
                     mechanic: formData.mechanic.trim() || null,
                     company_id: companyId
                 }])
@@ -92,6 +92,31 @@ const AddCustomer = () => {
                 .single();
 
             if (error) throw error;
+
+            // Insert vehicles into vehicles table
+            const vehicleInput = formData.vehicle.trim();
+            if (vehicleInput) {
+                const vehicleNumbers = vehicleInput
+                    .split(',')
+                    .map(v => v.trim().toUpperCase())
+                    .filter(Boolean);
+
+                if (vehicleNumbers.length > 0) {
+                    const vehiclesToInsert = vehicleNumbers.map(num => ({
+                        customer_id: data.id,
+                        vehicle_number: num,
+                        company_id: companyId
+                    }));
+
+                    const { error: vehiclesError } = await supabase
+                        .from('vehicles')
+                        .insert(vehiclesToInsert);
+
+                    if (vehiclesError) {
+                        console.error('Error inserting customer vehicles:', vehiclesError);
+                    }
+                }
+            }
 
             alert('Customer added successfully!');
             router.push(`/customer/${data.id}`); // Navigate to customer details page
@@ -207,12 +232,12 @@ const AddCustomer = () => {
                                 <Car size={18} />
                                 Vehicle <span className="text-gray-400 text-xs">(Optional)</span>
                             </label>
-                            <input
+                             <input
                                 type="text"
                                 value={formData.vehicle}
                                 onChange={(e) => handleChange('vehicle', e.target.value)}
-                                placeholder="Enter vehicle model/type"
-                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+                                placeholder="Enter vehicle numbers (comma separated for multiple)"
+                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors uppercase placeholder:normal-case font-semibold"
                             />
                         </div>
 

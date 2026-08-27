@@ -145,7 +145,8 @@ const InvoiceEstimateAdd = () => {
     customerName: '',
     customerAddress: '',
     vehicle: '',
-    phoneNumber: ''
+    phoneNumber: '',
+    vehicles: []
   });
   const [phoneError, setPhoneError] = useState('');
 
@@ -228,6 +229,8 @@ const InvoiceEstimateAdd = () => {
   };
 
   useEffect(() => {
+    if (!companyId) return;
+
     const fetchNextInvoiceNumber = async () => {
       try {
 
@@ -247,10 +250,11 @@ const InvoiceEstimateAdd = () => {
 
         } else {
 
-          // Get the last estimate number from the database
+          // Get the last estimate number from the database for this company
           const { data, error } = await supabase
             .from('estimate')
             .select('estimate_number')
+            .eq('company_id', companyId)
             .order('created_at', { ascending: false })
             .limit(1);
 
@@ -271,12 +275,16 @@ const InvoiceEstimateAdd = () => {
 
       } catch (error) {
         console.error('Error fetching invoice number:', error);
-        setInvoiceNumber('INV001');
+        if (isInvoice) {
+          setInvoiceNumber('INV001');
+        } else {
+          setEstimateNumber('EST001');
+        }
       }
     };
 
     fetchNextInvoiceNumber();
-  }, [isInvoice]);
+  }, [isInvoice, companyId]);
 
   // Initialize date
   useEffect(() => {
@@ -289,8 +297,11 @@ const InvoiceEstimateAdd = () => {
       setCustomerDetails({
         customerName: customerData.name || '',
         customerAddress: customerData.address || '',
-        vehicle: customerData.vehicle || '',
-        phoneNumber: customerData.phone_number
+        vehicle: customerData.vehicles && customerData.vehicles.length > 0 
+          ? customerData.vehicles[0].vehicle_number 
+          : '',
+        phoneNumber: customerData.phone_number,
+        vehicles: customerData.vehicles || []
       });
     }
   }, [customerData]);
@@ -376,8 +387,11 @@ const InvoiceEstimateAdd = () => {
     setCustomerDetails({
       customerName: selectedCustomer.name || '',
       customerAddress: selectedCustomer.address || '',
-      vehicle: selectedCustomer.vehicle || '',
-      phoneNumber: selectedCustomer.phone_number
+      vehicle: selectedCustomer.vehicles && selectedCustomer.vehicles.length > 0 
+        ? selectedCustomer.vehicles[0].vehicle_number 
+        : '',
+      phoneNumber: selectedCustomer.phone_number,
+      vehicles: selectedCustomer.vehicles || []
     });
     setGstin(selectedCustomer.gstin || '');
     setShowCustomerDropdown(false);
@@ -498,7 +512,7 @@ const InvoiceEstimateAdd = () => {
   // Handle Next Invoice - Reset form and prepare for new invoice
   const handleNextInvoice = async () => {
     // Reset form
-    setCustomerDetails({ customerName: '', customerAddress: '', vehicle: '', phoneNumber: '' });
+    setCustomerDetails({ customerName: '', customerAddress: '', vehicle: '', phoneNumber: '', vehicles: [] });
     setProducts([{ id: 1, serialNumber: 1, productName: '', hsnCode: '', quantity: '', rate: '', gstPercentage: 0, totalAmount: 0 }]);
     setPaymentMode('unpaid');
     setGstin('');
@@ -528,6 +542,7 @@ const InvoiceEstimateAdd = () => {
         const { data, error } = await supabase
           .from('estimate')
           .select('estimate_number')
+          .eq('company_id', companyId)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -565,7 +580,7 @@ const InvoiceEstimateAdd = () => {
             name: customerDetails.customerName,
             phone_number: customerDetails.phoneNumber,
             address: customerDetails.customerAddress,
-            vehicle: customerDetails.vehicle,
+            vehicle: null,
             company_id: companyId
           }])
           .select()
@@ -575,6 +590,35 @@ const InvoiceEstimateAdd = () => {
           throw new Error('Failed to create customer: ' + customerError.message);
         }
         customerId = newCustomer.id;
+      }
+
+      // Manage vehicle record in vehicles table
+      let vehicleId = null;
+      const selectedVehicleText = customerDetails.vehicle?.trim();
+      if (selectedVehicleText) {
+        const { data: existingVehicles } = await supabase
+          .from('vehicles')
+          .select('id')
+          .eq('customer_id', customerId)
+          .ilike('vehicle_number', selectedVehicleText);
+
+        if (existingVehicles && existingVehicles.length > 0) {
+          vehicleId = existingVehicles[0].id;
+        } else {
+          const { data: newVehicle, error: vehicleError } = await supabase
+            .from('vehicles')
+            .insert([{
+              customer_id: customerId,
+              vehicle_number: selectedVehicleText.toUpperCase(),
+              company_id: companyId
+            }])
+            .select()
+            .single();
+
+          if (!vehicleError && newVehicle) {
+            vehicleId = newVehicle.id;
+          }
+        }
       }
 
       const { data: invoiceData, error: invoiceError } = await supabase
@@ -590,7 +634,9 @@ const InvoiceEstimateAdd = () => {
           mode_of_payment: paymentMode,
           gstin: gstin,
           gst_included: gstIncluded,
-          company_id: companyId
+          company_id: companyId,
+          vehicle_id: vehicleId,
+          vehicle_number: selectedVehicleText || null
         }])
         .select()
         .single();

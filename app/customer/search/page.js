@@ -46,7 +46,7 @@ const CustomerSearch = () => {
             // Fetch customers
             const { data: customersData } = await supabase
                 .from('customers')
-                .select('*')
+                .select('*, vehicles(*)')
                 .eq('company_id', companyId)
                 .order('created_at', { ascending: false });
 
@@ -88,7 +88,7 @@ const CustomerSearch = () => {
             filtered = filtered.filter(customer =>
                 customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 customer.phone_number.includes(searchQuery) ||
-                customer.vehicle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                customer.vehicles?.some(v => v.vehicle_number?.toLowerCase().includes(searchQuery.toLowerCase())) ||
                 customer.address?.toLowerCase().includes(searchQuery.toLowerCase())
             );
         }
@@ -110,7 +110,7 @@ const CustomerSearch = () => {
         // Vehicle filter
         if (activeFilters.vehicle.trim()) {
             filtered = filtered.filter(customer =>
-                customer.vehicle?.toLowerCase().includes(activeFilters.vehicle.toLowerCase())
+                customer.vehicles?.some(v => v.vehicle_number?.toLowerCase().includes(activeFilters.vehicle.toLowerCase()))
             );
         }
 
@@ -411,12 +411,12 @@ const CustomerSearch = () => {
                                                             <Phone size={14} />
                                                             {customer.phone_number}
                                                         </span>
-                                                        {customer.vehicle && (
-                                                            <span className="flex items-center gap-1">
-                                                                <Car size={14} />
-                                                                {customer.vehicle}
-                                                            </span>
-                                                        )}
+                                                        {customer.vehicles && customer.vehicles.length > 0 && (
+                                                             <span className="flex items-center gap-1" title={customer.vehicles.map(v => v.vehicle_number).join(', ')}>
+                                                                 <Car size={14} />
+                                                                 {customer.vehicles.map(v => v.vehicle_number).join(', ')}
+                                                             </span>
+                                                         )}
                                                     </div>
                                                     {customer.address && (
                                                         <p className="text-sm text-gray-500 mt-1">{customer.address}</p>

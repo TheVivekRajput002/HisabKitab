@@ -18,6 +18,15 @@ const CustomerDetails = () => {
     const [customer, setCustomer] = useState(null);
     const [invoices, setInvoices] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [newVehicle, setNewVehicle] = useState('');
+    const [addingVehicle, setAddingVehicle] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editForm, setEditForm] = useState({
+        name: '',
+        phone_number: '',
+        address: ''
+    });
+    const [savingCustomer, setSavingCustomer] = useState(false);
     const [analytics, setAnalytics] = useState({
         totalPurchases: 0,
         totalPaid: 0,
@@ -39,7 +48,7 @@ const CustomerDetails = () => {
             // Fetch customer details
             const { data: customerData, error: customerError } = await supabase
                 .from('customers')
-                .select('*')
+                .select('*, vehicles(*)')
                 .eq('id', customerId)
                 .eq('company_id', companyId)
                 .single();
@@ -117,6 +126,90 @@ const CustomerDetails = () => {
             alert('Failed to delete customer');
         }
     };
+    
+    const handleAddVehicle = async (e) => {
+        e.preventDefault();
+        if (!newVehicle.trim()) return;
+        setAddingVehicle(true);
+        try {
+            const { data, error } = await supabase
+                .from('vehicles')
+                .insert([{
+                    customer_id: customerId,
+                    vehicle_number: newVehicle.trim().toUpperCase(),
+                    company_id: companyId
+                }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            
+            setCustomer(prev => ({
+                ...prev,
+                vehicles: [...(prev.vehicles || []), data]
+            }));
+            setNewVehicle('');
+        } catch (error) {
+            console.error('Error adding vehicle:', error);
+            alert('Failed to add vehicle: ' + (error.message || 'Unknown error'));
+        } finally {
+            setAddingVehicle(false);
+        }
+    };
+
+    const handleDeleteVehicle = async (vehicleId) => {
+        if (!window.confirm('Are you sure you want to remove this vehicle?')) return;
+        try {
+            const { error } = await supabase
+                .from('vehicles')
+                .delete()
+                .eq('id', vehicleId);
+
+            if (error) throw error;
+
+            setCustomer(prev => ({
+                ...prev,
+                vehicles: (prev.vehicles || []).filter(v => v.id !== vehicleId)
+            }));
+        } catch (error) {
+            console.error('Error deleting vehicle:', error);
+            alert('Failed to delete vehicle');
+        }
+    };
+
+    const handleSaveCustomer = async (e) => {
+        e.preventDefault();
+        if (!editForm.name.trim() || !editForm.phone_number.trim()) {
+            alert('Name and Phone Number are required');
+            return;
+        }
+        setSavingCustomer(true);
+        try {
+            const { error } = await supabase
+                .from('customers')
+                .update({
+                    name: editForm.name.trim(),
+                    phone_number: editForm.phone_number.trim(),
+                    address: editForm.address.trim()
+                })
+                .eq('id', customerId);
+
+            if (error) throw error;
+
+            setCustomer(prev => ({
+                ...prev,
+                name: editForm.name.trim(),
+                phone_number: editForm.phone_number.trim(),
+                address: editForm.address.trim()
+            }));
+            setIsEditModalOpen(false);
+        } catch (error) {
+            console.error('Error updating customer:', error);
+            alert('Failed to update customer details');
+        } finally {
+            setSavingCustomer(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -171,7 +264,14 @@ const CustomerDetails = () => {
                         </div>
                         <div className="flex gap-2 max-md:flex-col">
                             <button
-                                onClick={() => router.push(`/customer/edit/${customer.id}`)}
+                                onClick={() => {
+                                    setEditForm({
+                                        name: customer.name || '',
+                                        phone_number: customer.phone_number || '',
+                                        address: customer.address || ''
+                                    });
+                                    setIsEditModalOpen(true);
+                                }}
                                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
                             >
                                 <Edit size={18} />
@@ -214,20 +314,52 @@ const CustomerDetails = () => {
                             </div>
                         </div>
 
-                        {/* Vehicle/Mechanic Info */}
+                        {/* Vehicle Info */}
                         <div className="bg-white rounded-lg shadow-lg p-6">
                             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                                 <Car className="text-blue-600" size={24} />
-                                Vehicle & Mechanic
+                                Vehicles
                             </h2>
 
-                            <div>
-                                <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
-                                    Vehicle
-                                </p>
-                                <p className="font-semibold">{customer.vehicle}</p>
-                            </div>
+                            <div className="space-y-4">
+                                {/* Vehicles List */}
+                                <div className="space-y-2">
+                                    {(!customer.vehicles || customer.vehicles.length === 0) ? (
+                                        <p className="text-gray-500 text-sm">No vehicles added yet</p>
+                                    ) : (
+                                        customer.vehicles.map(v => (
+                                            <div key={v.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 transition-all">
+                                                <span className="font-bold text-gray-800 tracking-wide">{v.vehicle_number}</span>
+                                                <button
+                                                    onClick={() => handleDeleteVehicle(v.id)}
+                                                    className="text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded transition-colors"
+                                                    title="Remove vehicle"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
 
+                                {/* Add Vehicle Form */}
+                                <form onSubmit={handleAddVehicle} className="flex gap-2 pt-2 border-t border-gray-100">
+                                    <input
+                                        type="text"
+                                        placeholder="Add vehicle number"
+                                        value={newVehicle}
+                                        onChange={(e) => setNewVehicle(e.target.value)}
+                                        className="flex-1 px-3 py-1.5 text-sm border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent uppercase placeholder:normal-case placeholder:text-gray-400 font-semibold"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={addingVehicle || !newVehicle.trim()}
+                                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors flex items-center"
+                                    >
+                                        {addingVehicle ? 'Adding...' : 'Add'}
+                                    </button>
+                                </form>
+                            </div>
                         </div>
 
                         {/* Membership Info */}
@@ -354,6 +486,68 @@ const CustomerDetails = () => {
                     </div>
                 </div>
             </div>
+
+            {/* Edit Customer Modal */}
+            {isEditModalOpen && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+                        <button
+                            onClick={() => setIsEditModalOpen(false)}
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                            <XCircle size={24} />
+                        </button>
+                        <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Customer Details</h3>
+                        <form onSubmit={handleSaveCustomer} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Name</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editForm.name}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={editForm.phone_number}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, phone_number: e.target.value }))}
+                                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1">Address</label>
+                                <textarea
+                                    value={editForm.address}
+                                    onChange={(e) => setEditForm(prev => ({ ...prev, address: e.target.value }))}
+                                    className="w-full px-3 py-2 border-2 border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="flex gap-3 justify-end pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsEditModalOpen(false)}
+                                    className="px-4 py-2 border-2 border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={savingCustomer}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    {savingCustomer ? 'Saving...' : 'Save Changes'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
