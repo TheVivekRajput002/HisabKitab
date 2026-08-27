@@ -23,9 +23,14 @@ const MODEL_SELECTION_ERROR_HINTS = [
   'unsupported model',
   'invalid model',
   'not a valid model',
-  'is not found for api version'
+  'is not found for api version',
+  'no longer available',
+  'not found'
 ];
 const DEFAULT_LIGHT_MODEL_FALLBACKS = [
+  'gemini-3.1-pro-preview',
+  'gemini-3.6-flash',
+  'gemini-2.5-flash',
   'gemini-2.5-flash-lite',
   'gemini-2.0-flash-lite',
   'gemini-2.0-flash'
@@ -91,8 +96,21 @@ const isHighDemandGeminiError = (error) => {
 };
 
 const isModelSelectionError = (error) => {
+  const status =
+    error?.status ||
+    error?.code ||
+    error?.response?.status ||
+    error?.cause?.status ||
+    error?.error?.code ||
+    error?.error?.status;
+
+  if (Number(status) === 404 || String(status).toUpperCase() === 'NOT_FOUND') {
+    return true;
+  }
+
   const message = String(
     error?.message ||
+    error?.error?.message ||
     error?.error ||
     error?.cause?.message ||
     ''

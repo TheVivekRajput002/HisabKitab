@@ -221,9 +221,10 @@ Rules:
         
         `; // Your existing prompt
 
-    const { response } = await generateGeminiContentWithFailover({
-      model: 'gemini-2.5-pro',
-      fallbackModels: ['gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+    const scanStart = performance.now();
+    const { response, usedModel } = await generateGeminiContentWithFailover({
+      model: 'gemini-3.6-flash',
+      fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
       contents: [{
         parts: [
           { text: prompt },
@@ -232,17 +233,23 @@ Rules:
       }],
       config: { temperature: 0.1, maxOutputTokens: 4096, responseMimeType: 'application/json' }
     });
+    const scanEnd = performance.now();
+    console.log(`[Scan Invoice] OCR scan succeeded using model: "${usedModel}" in ${((scanEnd - scanStart) / 1000).toFixed(2)}s`);
 
     let rawText = typeof response.text === 'function' ? response.text() : response.text;
 
     if (!isValidInvoiceJson(rawText)) {
+      console.log(`[Scan Invoice] Invalid JSON returned. Initiating JSON repair...`);
       const repairPrompt = `Fix this into valid JSON only. Return one JSON object with keys "vendor", "invoice", "products" where "products" is always an array. No markdown or explanation.\n\n${rawText}`;
-      const { response: repairedResponse } = await generateGeminiContentWithFailover({
-        model: 'gemini-2.5-pro',
-        fallbackModels: ['gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+      const repairStart = performance.now();
+      const { response: repairedResponse, usedModel: repairModel } = await generateGeminiContentWithFailover({
+        model: 'gemini-3.6-flash',
+        fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.1-pro'],
         contents: [{ parts: [{ text: repairPrompt }] }],
         config: { temperature: 0, maxOutputTokens: 4096, responseMimeType: 'application/json' }
       });
+      const repairEnd = performance.now();
+      console.log(`[Scan Invoice] JSON repair succeeded using model: "${repairModel}" in ${((repairEnd - repairStart) / 1000).toFixed(2)}s`);
 
       rawText = typeof repairedResponse.text === 'function' ? repairedResponse.text() : repairedResponse.text;
     }

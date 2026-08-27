@@ -41,7 +41,7 @@ function Badge({ children, variant = 'default', className = '' }) {
   return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>{children}</span>;
 }
 
-function useProgressBar({ stopAt = 95, rampDuration = 12000 } = {}) {
+function useProgressBar({ stopAt = 95, rampDuration = 25000 } = {}) {
   const [progress, setProgress] = useState(0);
   const [phase, setPhase] = useState('idle');
   const rafRef = useRef(null);
@@ -153,7 +153,7 @@ function ScanProgressBar({ bar }) {
 const constants = {
   MAX_IMAGE_SIZE: 15 * 1024 * 1024,
   ALLOWED_IMAGE_TYPES: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-  GEMINI_MODEL: 'gemini-2.5-flash',
+  GEMINI_MODEL: 'gemini-3.6-flash',
   API_KEY_STORAGE_KEY: 'gemini_api_key',
   // Optimized for faster scanning vs quality
   SCAN_QUALITY: 0.7,
@@ -1297,7 +1297,7 @@ export default function InvoiceScanner() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [showCropper, setShowCropper] = useState(false);
   const [error, setError] = useState(null);
-  const scanProgressBar = useProgressBar({ stopAt: 95, rampDuration: 12000 });
+  const scanProgressBar = useProgressBar({ stopAt: 95, rampDuration: 25000 });
 
   // qr code data 
   const payload = JSON.stringify({

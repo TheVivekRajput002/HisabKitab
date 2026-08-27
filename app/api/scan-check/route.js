@@ -36,9 +36,10 @@ Rules:
 - "CRITICAL: Return ONLY valid JSON with NO spaces before colons. Format: \\"key\\":value not \\"key\\" :value"
 `;
 
-        const { response } = await generateGeminiContentWithFailover({
-            model: 'gemma-4-31b-it',
-            fallbackModels: ['gemma-4-26b-a4b-it', 'gemini-2.5-flash'],
+        const scanStart = performance.now();
+        const { response, usedModel } = await generateGeminiContentWithFailover({
+            model: 'gemini-3.6-flash',
+            fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
             contents: [{
                 parts: [
                     { text: prompt },
@@ -47,6 +48,8 @@ Rules:
             }],
             config: { temperature: 0.1, maxOutputTokens: 4096 }
         });
+        const scanEnd = performance.now();
+        console.log(`[Scan Cheque] Cheque scan succeeded using model: "${usedModel}" in ${((scanEnd - scanStart) / 1000).toFixed(2)}s`);
 
         const rawText = typeof response.text === 'function' ? response.text() : response.text;
 
