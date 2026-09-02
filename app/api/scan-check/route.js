@@ -38,7 +38,7 @@ Rules:
 
         const scanStart = performance.now();
         const { response, usedModel } = await generateGeminiContentWithFailover({
-            model: 'gemini-3.6-flash',
+            model: 'gemini-3.5-flash-lite',
             fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
             contents: [{
                 parts: [
