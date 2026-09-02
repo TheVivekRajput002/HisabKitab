@@ -223,7 +223,7 @@ Rules:
 
     const scanStart = performance.now();
     const { response, usedModel } = await generateGeminiContentWithFailover({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.5-flash-lite',
       fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
       contents: [{
         parts: [
@@ -234,16 +234,18 @@ Rules:
       config: { temperature: 0.1, maxOutputTokens: 4096, responseMimeType: 'application/json' }
     });
     const scanEnd = performance.now();
-    console.log(`[Scan Invoice] OCR scan succeeded using model: "${usedModel}" in ${((scanEnd - scanStart) / 1000).toFixed(2)}s`);
+    const scanDuration = scanEnd - scanStart;
+    console.log(`[Scan Invoice] OCR scan succeeded using model: "${usedModel}" in ${(scanDuration / 1000).toFixed(2)}s`);
 
     let rawText = typeof response.text === 'function' ? response.text() : response.text;
+    let effectiveModel = usedModel;
 
     if (!isValidInvoiceJson(rawText)) {
       console.log(`[Scan Invoice] Invalid JSON returned. Initiating JSON repair...`);
       const repairPrompt = `Fix this into valid JSON only. Return one JSON object with keys "vendor", "invoice", "products" where "products" is always an array. No markdown or explanation.\n\n${rawText}`;
       const repairStart = performance.now();
       const { response: repairedResponse, usedModel: repairModel } = await generateGeminiContentWithFailover({
-        model: 'gemini-3.6-flash',
+        model: 'gemini-2.5-flash',
         fallbackModels: ['gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.1-pro'],
         contents: [{ parts: [{ text: repairPrompt }] }],
         config: { temperature: 0, maxOutputTokens: 4096, responseMimeType: 'application/json' }
@@ -252,10 +254,18 @@ Rules:
       console.log(`[Scan Invoice] JSON repair succeeded using model: "${repairModel}" in ${((repairEnd - repairStart) / 1000).toFixed(2)}s`);
 
       rawText = typeof repairedResponse.text === 'function' ? repairedResponse.text() : repairedResponse.text;
+      effectiveModel = `${usedModel} (repaired by ${repairModel})`;
     }
 
-    // Return raw response for client-side parsing
-    return NextResponse.json({ rawText });
+    const totalDurationMs = Math.round(performance.now() - scanStart);
+
+    // Return raw response for client-side parsing along with model and performance metadata
+    return NextResponse.json({
+      rawText,
+      model: effectiveModel,
+      usedModel,
+      responseTimeMs: totalDurationMs
+    });
 
   } catch (error) {
     console.error('Gemini API Error:', error);

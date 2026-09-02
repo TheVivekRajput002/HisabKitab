@@ -387,18 +387,26 @@ function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
 
 const geminiService = {
   extractProductsFromImage: async (imageBase64) => {
+    const startTime = performance.now();
     const response = await fetch('/api/scan-invoice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ imageBase64 })
     });
 
+    const endTime = performance.now();
+    const clientResponseTimeMs = Math.round(endTime - startTime);
+
     if (!response.ok) {
       const { error } = await response.json();
       throw new Error(error || 'Failed to scan invoice');
     }
 
-    const { rawText } = await response.json();
+    const { rawText, model, usedModel, responseTimeMs } = await response.json();
+
+    const activeModel = model || usedModel || 'Unknown Model';
+    console.log(`[Scan Invoice] Model used: ${activeModel}`);
+    console.log(`[Scan Invoice] Response time: ${clientResponseTimeMs}ms (${(clientResponseTimeMs / 1000).toFixed(2)}s)${responseTimeMs ? ` [Server: ${responseTimeMs}ms]` : ''}`);
 
     if (!rawText) throw new Error('No response from AI');
     // Helper to extract and clean JSON
@@ -453,10 +461,7 @@ const geminiService = {
     const vendorData = jsonData.vendor || {};
     const invoiceData = jsonData.invoice || {};
 
-    console.log('Extracted Vendor:', vendorData);
-    console.log('Extracted Invoice:', invoiceData);
-
-    // Map products (this part stays mostly the same)
+    // Map products
     const products = jsonData.products.map((p, index) => ({
       id: `product_${Date.now()}_${index}`,
       name: p.name || p.product_name || 'Unknown Product',
@@ -472,12 +477,17 @@ const geminiService = {
       edited: false
     }));
 
-    // Return both products and metadata
-    return {
-      products,
+    const structuredData = {
       vendor: vendorData,
-      invoice: invoiceData
+      invoice: invoiceData,
+      products
     };
+
+    console.log('[Scan Invoice] 📥 Extracted Data (Raw AI Output):', jsonData);
+    console.log('[Scan Invoice] 🏗️ Structured Data (Formatted App Model):', structuredData);
+
+    // Return both products and metadata
+    return structuredData;
   }
 };
 
