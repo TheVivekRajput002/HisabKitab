@@ -1,85 +1,88 @@
 User Flow & Navigation Map - HisabKitab
-This document outlines the user journey through the HisabKitab application, mapping the UI components, links, and how tabs intertwine.
+
+This document outlines the complete user journey through the HisabKitab application, mapping the UI components, links, workflows, and interactive modules.
 
 1. Global Navigation & Layout
-Location: The 
-Header.js
- layout serves as the permanent navigation anchor.
+- Header & Sidebar Navigation: The system uses a responsive layout anchored by `Header.js` and a persistent sidebar on desktop or a mobile navigation bar.
+- Global Utilities:
+  - Language Switcher: Toggle between English (`EN`) and Hindi (`HI`) available in the top banner. Changes locale globally without navigating away (`next-intl`).
+  - Keyboard Shortcuts Help: Floating "(?)" icon or hotkey. Opens `KeyboardShortcutsHelp.js` modal overlay over any screen.
+  - Global Hotkeys: Pressing `Ctrl + I` from anywhere opens `/billing/invoice`. Pressing `Ctrl + Shift + L` locks session / logs out.
 
-Desktop View: A persistent left-hand Sidebar.
-Mobile View: A sticky Bottom Navigation bar.
-Global Utilities:
-Language Switcher: Toggle (EN/HI) available in the top banner. Changes locale globally without navigating away.
-Keyboard Shortcuts Help: A floating "(?)" button. Clicking it instantly opens a 
-KeyboardShortcutsHelp.js
- modal overlay over the current screen.
-Hotkeys: Pressing Ctrl + I from anywhere opens /billing/invoice. Pressing Ctrl + C opens /customer/add.
 2. Dashboard (/)
-Entry Point: User lands here after authentication.
-Contents: Highlights Today's, Weekly, and Monthly sales metrics via Recharts.
-Actions & Routing:
-Clicking "New Invoice" (Quick Action) -> Navigates to /billing/invoice
-Clicking a "Recent Customer" -> Navigates to /customer/[id]
+- Entry Point: User lands here after authentication and company workspace selection.
+- Contents: Real-time business KPIs (Today's, Weekly, and Monthly Sales, Invoices Generated, Top Customer, Best Selling Products) powered by Recharts.
+- Quick Actions & Routing:
+  - "New Invoice" -> Navigates to `/billing/invoice`
+  - "Scan Bill / Purchase" -> Navigates to `/vendor/scanner`
+  - "Vendor Directory" -> Navigates to `/vendor`
+  - "Recent Customer / Invoice" -> Navigates to `/customer/[id]` or `/billing`
+
 3. Billing & Invoicing Module
-Hub Page: /billing
+- Hub Page: `/billing`
+- What User Sees: Overview of Recent Invoices, Pending Estimates, quick action cards, and billing search filters.
+- Workflows:
+  - Create Invoice (`/billing/invoice`): User inputs customer details, selects/searches products (with auto-calculated prices, HSN, and GST via `useInvoiceCalculations`). Generating opens PDF preview modal (`jspdf`) and offers one-click WhatsApp sharing (`api.whatsapp.com/send`).
+  - Create Estimate (`/billing/estimate`): Generates pre-invoice estimates converted into final invoices upon customer confirmation.
+  - Quick Product Auto-Save: Typing a non-existent product code during invoice creation seamlessly registers the item into inventory (`products`).
 
-What User Sees: A dashboard summarizing Recent Invoices, Pending Estimates, and action cards.
-Actions:
-"Create Invoice" Card -> Navigates to /billing/invoice
-Inside /billing/invoice: User inputs data. Pressing "Generate" triggers the PDF generator (jspdf) and opens a preview modal. Clicking "Share via WhatsApp" dynamically opens the api.whatsapp.com/send intent link.
-"Create Estimate" Card -> Navigates to /billing/estimate
-"Manage Bills" Card -> Navigates to a list view /billing/[invoice_estimate] for searching old invoices.
-"Scan Invoice via AI" -> Opens /billing/add (or a modal overlay). Uploading an image triggers the scan-invoice API and auto-fills a draft invoice.
-4. Customer Module
-Hub Page: /customer
+4. AI Bill & Cheque Scanning Module
+- Scanner Route: `/vendor/scanner` (Accessible via Vendor page or Dashboard quick actions)
+- Workflows:
 
-What User Sees: Search bar, list of top clients, and an "Add Customer" button.
-Actions:
-"Add Customer" -> Navigates to /customer/add. A form validates inputs. On save, navigates back to /customer.
-"Search Customers" -> Typing activates 
-useCustomerSearch
- hook, dynamically showing live results or routing to /customer/search for advanced filtering.
-Clicking a Customer Card -> Navigates to /customer/[id] (Detailed Customer Profile).
-Inside Profile (/customer/[id]):
-"Edit Details" -> Opens an inline editing mode.
-"View Ledger" -> Sub-tab showing historical invoices connected to this customer ID. Clicking an invoice here likely opens a PDF preview or navigates to the invoice detail.
-5. Inventory Management Module
-Hub Page: /inventory
+  1. AI Bill Scanner (Purchase Invoice OCR):
+     - Step 1: Input Selection — User chooses live web-camera stream capture or drags & drops image/PDF purchase bills.
+     - Step 2: Interactive Cropping — Powered by `react-image-crop`, user can crop, rotate, or zoom to isolate invoice boundaries.
+     - Step 3: OCR Processing — Progress bar displays execution state while sending base64 image data to `/api/scan-invoice`.
+     - Step 4: AI Failover & Repair — Uses `generateGeminiContentWithFailover` (`gemini-3.5-flash-lite` -> fallbacks). If response contains malformed JSON, automatically invokes secondary repair model (`gemini-2.5-flash`).
+     - Step 5: Review & Reconciliation — Displays extracted Vendor Name, GSTIN, Bill Number, Date, Total Amount, and Line-Item table (Product Name, Quantity, Purchase Price, HSN, Tax %, Discount %). Subtotals and taxes are auto-reconciled against total bill amount.
+     - Step 6: Direct Commit — Clicking "Save Bill & Update Stock" commits `vendor_bills`, updates inventory stock levels (`products.current_stock`), and returns to `/vendor`.
 
-What User Sees: Complete product catalog table with search and filters.
-Actions:
-"Add Product" -> Navigates to /inventory/add. (Note: Products can also be auto-saved blindly from the Invoice page using 
-useProductAutoSave
- if a user types a non-existent item code).
-Inline Editing: Clicking a row's "Pencil" icon allows the user to edit Stock Quantities or Selling Price inline without changing the URL.
-"Generate QR" -> Triggers a modal displaying a scannable QR code using the qrcode library.
-6. Vendor & Purchases Module
-Hub Page: /vendor
+  2. AI Cheque Scanner (Bank Draft OCR):
+     - Step 1: Modal / Scanner Activation — User opens Cheque Scanner from `/vendor/scanner` tab or directly inside Vendor Payout forms.
+     - Step 2: Capture & Scan — Image captured via camera/upload is dispatched to `/api/scan-check`.
+     - Step 3: Data Extraction — Gemini extracts Amount (figures/words), Cheque Serial Number, Bank Name, Cheque Date (`YYYY-MM-DD`), Payee Name, Account Number, IFSC Code, and Notes.
+     - Step 4: Auto-Fill & Payout Logging — Auto-populates the Vendor Payment form with extracted fields to record outgoing cheque transactions.
 
-What User Sees: Grid of Vendor Cards showing total pending bills and quick actions.
-Actions:
-"Add Vendor" -> Opens a modal overlay to register a new vendor.
-"AI Bill Scanner" -> Navigates to /vendor/scanner.
-Inside Scanner: User uploads bill photo -> Gemini API processes -> Opens a "Confirmation Modal" mapping extracted items. -> User clicks "Add to Stock" -> Data commits to Supabase and navigates back to /vendor.
-"View Bills" on Vendor Card -> Navigates to /vendor/[vendorId]/bills
-Inside Bills: Shows table of all purchase invoices from this vendor. Clicking "Add Payment" against a specific bill opens an inline payment drawer/modal.
-"View Ledger/Payments" on Vendor Card -> Navigates to /vendor/[vendorId]/payments
-Inside Payments: A master ledger of all RTGS/Cheque/Cash payouts made to the vendor over time.
-7. Staff & HR Module
-Hub Page: /staff
+5. Vendor & Purchases Module
+- Hub Page: `/vendor`
+- What User Sees: Grid of Vendor Cards displaying Firm Name, GSTIN, Total Bills Count, Unpaid Bills Summary, and action buttons.
+- Workflows:
+  - Add / Edit Vendor: Modal overlay to register vendor profile (Name, Firm Name, GSTIN, Phone, Email, Address, Bank details).
+  - Launch AI Scanner: Direct button to navigate to `/vendor/scanner`.
+  - View Vendor Bills (`/vendor/[vendorId]/bills`): Lists all purchase bills for the vendor. Shows payment status (`unpaid`, `partially paid`, `paid`). User can open bill details or add payments against a specific bill.
+  - View Vendor Ledger & Payments (`/vendor/[vendorId]/payments`): Complete financial ledger of all outward payments (Cash, Cheque, UPI, RTGS) made to the vendor over time.
+  - Record Vendor Payment (`/vendor/pay` or Payout Drawer): Opens payout form with direct option to scan paper cheques using AI Cheque Scanner or enter payment details manually. Updates vendor balance and bill payment status.
 
-What User Sees: A multi-tab interface (Directory, Attendance, Advances, Salary). Does not navigate away per tab.
-Tab Interactions:
-Tab 1: Directory: List of staff. "Add Staff" opens a modal.
-Tab 2: Attendance: Calendar/Grid view. Clicking a date for a staff member toggles their status (Present -> Half-Day -> Absent).
-Tab 3: Advances: Form to quickly deduct loan/advance quantities from a user's upcoming paycheck.
-Tab 4: Salary Records: End of month summary. "Generate Slip" triggers a PDF download.
-8. Reports & Analytics
-Hub Page: /report
+6. Customer Module
+- Hub Page: `/customer`
+- What User Sees: Search bar, client list, credit summaries, and "Add Customer" button.
+- Workflows:
+  - Add Customer (`/customer/add`): Form validating contact info, GSTIN, and vehicle details (for automotive/service businesses).
+  - Client Search: Dynamic search via `useCustomerSearch` hook with multi-column filtering.
+  - Customer Profile (`/customer/[id]`): Shows client details, past invoice history, outstanding dues, and ledger reports.
 
-What User Sees: High-level dashboard with a Date Picker.
-Actions:
-Changing the date range triggers Supabase filtering and dynamically updates the Recharts graphs (Area / Bar charts) without a page reload.
-Sub-sections display Tables for "Top Selling Products" and "Highest Paying Customers".
-Special App Flows (Zero-Click Integrations)
-Typing a Product Code in Billing: If a user is on /billing/invoice and types an HSN or Item Code that exists, it instantly pulls the custom_price and gst_rate from /inventory in real-time. If it doesn't exist, it hooks into /inventory/add silently and creates the item for future use.
+7. Inventory Management Module
+- Hub Page: `/inventory`
+- What User Sees: Master product catalog table with live stock levels, purchase prices, selling prices, HSN codes, and search filters.
+- Workflows:
+  - Add Product (`/inventory/add`): Manual product registration with selling price, purchase price, HSN, and initial stock.
+  - Stock Sync via Bill Scan: Automatically increments current stock when vendor bills are approved in the AI Bill Scanner.
+  - QR & Barcode Generation: Clicking "Generate QR/Barcode" triggers modal displaying scannable product tags generated via `qrcode`.
+  - Inline Editing: Modify stock quantities or prices inline without navigating away.
+
+8. Staff & HR Module
+- Hub Page: `/staff`
+- What User Sees: Tabbed interface managing Staff Directory, Attendance, Salary Advances, and Monthly Salary Slips.
+- Workflows:
+  - Directory: Register staff profiles, roles, and monthly base salary.
+  - Attendance Logging: Grid view to toggle daily attendance (`Present`, `Half-Day`, `Absent`).
+  - Salary Advances: Record loans or advance deductions against upcoming paychecks.
+  - Payroll Generation: Monthly summary calculating net salary after advance deductions and generating downloadable PDF salary slips.
+
+9. Reports & Analytics
+- Hub Page: `/report`
+- What User Sees: Interactive analytics dashboard with dynamic date range selector.
+- Workflows:
+  - Date filtering updates Recharts visuals (sales trends, revenue comparison) without page reload.
+  - Exportable summaries for Top Selling Products, High-Value Customers, and Vendor Dues.
