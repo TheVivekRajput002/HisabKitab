@@ -219,7 +219,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
 
             if (!response.ok) {
                 const { error: apiError } = await response.json();
-                throw new Error(apiError || "Failed to scan check");
+                throw new Error(apiError || "Failed to scan payment document");
             }
 
             const { rawText } = await response.json();
@@ -237,7 +237,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
             onExtracted(data);
             onClose();
         } catch (err) {
-            setError(err.message || "Failed to scan check.");
+            setError(err.message || "Failed to scan document.");
         } finally {
             setScanning(false);
         }
@@ -249,7 +249,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                 <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <ScanLine className="text-blue-600" size={22} />
-                        <h2 className="text-lg font-bold text-gray-800">Scan Check</h2>
+                        <h2 className="text-lg font-bold text-gray-800">Scan Cheque / RTGS</h2>
                     </div>
                     <button onClick={onClose} className="p-1.5 hover:bg-gray-200 rounded-full transition-colors" disabled={scanning}>
                         <X size={20} className="text-gray-500" />
@@ -263,13 +263,13 @@ function CheckScannerModal({ onExtracted, onClose }) {
                         <div className="space-y-3">
                             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all">
                                 <Upload className="w-10 h-10 text-gray-400 mb-2" />
-                                <p className="text-sm text-gray-500">Upload check image</p>
+                                <p className="text-sm text-gray-500 font-medium">Upload Cheque or RTGS / Bank Statement</p>
                                 <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP (MAX 5MB)</p>
                                 <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={scanning} />
                             </label>
                             <button
                                 onClick={() => cameraInputRef.current?.click()}
-                                className="w-full px-4 py-2.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center justify-center gap-2"
+                                className="w-full px-4 py-2.5 bg-gray-100 rounded-lg hover:bg-gray-200 flex items-center justify-center gap-2 font-medium"
                                 disabled={scanning}
                             >
                                 <Camera size={18} />
@@ -288,7 +288,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                     ) : (
                         <div className="space-y-3">
                             <div className="relative">
-                                <img src={imagePreview} alt="Check preview" className="w-full max-h-72 object-contain bg-gray-50 rounded-lg border" />
+                                <img src={imagePreview} alt="Document preview" className="w-full max-h-72 object-contain bg-gray-50 rounded-lg border" />
                                 <div className="absolute top-2 right-2 flex gap-2">
                                     <button onClick={() => setShowCropper(true)} className="p-2 bg-blue-500 text-white rounded-full hover:bg-blue-600" title="Crop">
                                         <Crop size={16} />
@@ -301,10 +301,10 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             <button
                                 onClick={handleScan}
                                 disabled={scanning}
-                                className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2"
+                                className="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-70 flex items-center justify-center gap-2 font-medium"
                             >
                                 {scanning ? <Loader2 className="animate-spin" size={18} /> : <ScanLine size={18} />}
-                                {scanning ? "Extracting..." : "Extract Check Details"}
+                                {scanning ? "Extracting..." : "Extract Payment Details"}
                             </button>
                         </div>
                     )}
@@ -425,7 +425,7 @@ export default function VendorPayPickerPage() {
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     <div className="p-6 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
                         <h1 className="text-2xl font-bold text-gray-800 mb-2">Pay to Vendor</h1>
-                        <p className="text-gray-600">Scan check to match payee with vendor, or enter vendor ID manually.</p>
+                        <p className="text-gray-600">Scan Cheque or RTGS / Bank Statement to match payee with vendor, or enter vendor ID manually.</p>
                     </div>
 
                     <div className="p-6 space-y-5">
@@ -434,20 +434,20 @@ export default function VendorPayPickerPage() {
                         <div className="space-y-3">
                             <button
                                 onClick={() => setShowScanner(true)}
-                                className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                                className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 font-medium"
                             >
                                 <ScanLine size={18} />
-                                Scan Check and Match Vendor
+                                Scan Cheque / RTGS & Match Vendor
                             </button>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Payee Name (from check)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Payee / Vendor Name (from Cheque / RTGS)</label>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
                                         value={payeeName}
                                         onChange={(e) => setPayeeName(e.target.value)}
-                                        placeholder="Enter or scan payee name"
+                                        placeholder="Enter or scan payee / vendor name"
                                         className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                                     />
                                     <button
@@ -499,7 +499,7 @@ export default function VendorPayPickerPage() {
                                 placeholder="Vendor ID"
                                 className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
                             />
-                            <p className="text-xs text-gray-500 mt-1">Manual ID works if check match is not found.</p>
+                            <p className="text-xs text-gray-500 mt-1">Manual ID works if document match is not found.</p>
                         </div>
 
                         <button
@@ -515,7 +515,7 @@ export default function VendorPayPickerPage() {
 
                 <div className="mt-4 bg-white rounded-lg shadow-sm p-3 text-xs text-gray-600 flex items-center gap-2">
                     <Building2 size={14} />
-                    This opens the same vendor payment page used in vendor bill flow.
+                    This opens the vendor payment page prefilled with extracted details.
                 </div>
             </div>
 

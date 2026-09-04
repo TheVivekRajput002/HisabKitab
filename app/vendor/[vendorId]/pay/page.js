@@ -481,7 +481,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                 <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <ScanLine className="text-blue-600" size={22} />
-                        <h2 className="text-lg font-bold text-gray-800">Scan Check</h2>
+                        <h2 className="text-lg font-bold text-gray-800">Scan Cheque / RTGS</h2>
                     </div>
                     <button
                         onClick={onClose}
@@ -506,7 +506,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all">
                                 <Upload className="w-10 h-10 text-gray-400 mb-2" />
                                 <p className="text-sm text-gray-500">
-                                    <span className="font-semibold text-blue-600">Click to upload</span> a check image
+                                    <span className="font-semibold text-blue-600">Click to upload</span> a Cheque or RTGS image
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP (MAX. 5MB)</p>
                                 <input
@@ -526,7 +526,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                                 disabled={scanning}
                             >
                                 <Camera size={20} />
-                                Take Photo of Check
+                                Take Photo of Cheque / RTGS
                             </button>
                             <input
                                 ref={cameraInputRef}
@@ -539,7 +539,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             />
 
                             <p className="text-xs text-gray-400 text-center">
-                                Upload or photograph the filled check. AI will extract the details automatically.
+                                Upload or photograph the cheque or RTGS / bank transfer statement. AI will extract details automatically.
                             </p>
                         </div>
                     ) : (
@@ -584,7 +584,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             {scanning && (
                                 <div className="flex flex-col items-center py-4">
                                     <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-                                    <p className="text-sm text-gray-600 font-medium">Extracting check details...</p>
+                                    <p className="text-sm text-gray-600 font-medium">Extracting payment details...</p>
                                     <p className="text-xs text-gray-400 mt-1">This may take a few seconds</p>
                                 </div>
                             )}
@@ -753,20 +753,30 @@ export default function VendorPayPage() {
         }
     };
 
-    // Handle extracted check data from the scanner modal
+    // Handle extracted check or RTGS data from the scanner modal
     const handleCheckExtracted = (data, imageFile) => {
+        const isRtgs = data?.document_type === 'RTGS' || Boolean(data?.rtgs_transaction_id);
+        const method = isRtgs ? 'RTGS' : 'CHEQUE';
         setFormData(prev => ({
             ...prev,
-            payment_method: 'CHEQUE',
+            payment_method: method,
             amount: data.amount || prev.amount,
+
+            // CHEQUE fields
             cheque_number: data.cheque_number || prev.cheque_number,
             cheque_bank: data.cheque_bank || prev.cheque_bank,
             company_name: data.pay_name || data.payee_name || prev.company_name,
-            cheque_date: data.cheque_date || prev.cheque_date,
-            payment_date: data.cheque_date || prev.payment_date,
+            cheque_date: data.cheque_date || data.date || prev.cheque_date,
+
+            // RTGS fields
+            rtgs_transaction_id: data.rtgs_transaction_id || prev.rtgs_transaction_id,
+            rtgs_bank: data.rtgs_bank || data.cheque_bank || data.ifsc_code || prev.rtgs_bank,
+            rtgs_transfer_date: data.rtgs_transfer_date || data.date || data.cheque_date || prev.rtgs_transfer_date,
+
+            payment_date: data.date || data.cheque_date || data.rtgs_transfer_date || prev.payment_date,
             notes: data.notes || prev.notes
         }));
-        // Store the cheque image file for upload on submit
+        // Store the cheque/payment image file for upload on submit
         if (imageFile) setChequeImageFile(imageFile);
         setScanFilled(true);
         setTimeout(() => setScanFilled(false), 5000);
@@ -971,14 +981,14 @@ export default function VendorPayPage() {
                                 </p>
                             </div>
 
-                            {/* Scan Check Button — only for CHEQUE method */}
-                            {formData.payment_method === 'CHEQUE' && (
+                            {/* Scan Check / RTGS Button — for CHEQUE or RTGS method */}
+                            {(formData.payment_method === 'CHEQUE' || formData.payment_method === 'RTGS') && (
                                 <button
                                     onClick={() => setShowScanner(true)}
                                     className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg hover:from-indigo-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg text-sm font-medium"
                                 >
                                     <ScanLine size={18} />
-                                    Scan Check
+                                    Scan Cheque / RTGS
                                 </button>
                             )}
                         </div>
@@ -987,7 +997,7 @@ export default function VendorPayPage() {
                         {scanFilled && (
                             <div className="mt-3 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                                 <CheckCircle2 size={16} />
-                                Check details auto-filled! Review and edit below before submitting.
+                                Payment details auto-filled! Review and edit below before submitting.
                             </div>
                         )}
                     </div>
