@@ -12,7 +12,6 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Barcode, 
-  Package, 
   Plus, 
   Volume2, 
   VolumeX,
@@ -75,39 +74,47 @@ const BarcodeScannerModal = ({
   const scannerRef = useRef(null);
   const lastScannedCodeRef = useRef({ code: '', time: 0 });
   const containerId = 'barcode-scanner-viewport';
+  const isOperatingRef = useRef(false);
 
-  // Stop scanner instance
+  // Keep fresh references for handlers so callbacks don't trigger scanner re-initialization
+  const propsRef = useRef({
+    onScanSuccess,
+    searchProductByCode,
+    soundEnabled,
+    isProcessing
+  });
+
+  useEffect(() => {
+    propsRef.current = {
+      onScanSuccess,
+      searchProductByCode,
+      soundEnabled,
+      isProcessing
+    };
+  }, [onScanSuccess, searchProductByCode, soundEnabled, isProcessing]);
+
+  // Stop scanner safely
   const stopScanner = useCallback(async () => {
     if (scannerRef.current) {
       try {
-        if (scannerRef.current.isScanning) {
-          await scannerRef.current.stop();
+        const instance = scannerRef.current;
+        scannerRef.current = null;
+        if (instance.isScanning) {
+          await instance.stop();
         }
-        await scannerRef.current.clear();
+        await instance.clear();
       } catch (err) {
         console.warn('Error stopping scanner:', err);
       } finally {
-        scannerRef.current = null;
         setIsScanning(false);
         setTorchOn(false);
       }
     }
   }, []);
 
-  // Clear state when modal opens/closes
-  useEffect(() => {
-    if (!isOpen) {
-      stopScanner();
-      setStatusMessage(null);
-      setCameraError(null);
-    } else {
-      setStatusMessage({ type: 'info', text: 'Point camera at any barcode or part number' });
-    }
-  }, [isOpen, stopScanner]);
-
   // Handle barcode result
   const handleCodeFound = useCallback(async (decodedText) => {
-    if (!decodedText || isProcessing) return;
+    if (!decodedText || propsRef.current.isProcessing) return;
 
     const trimmedCode = decodedText.trim();
     const now = Date.now();
@@ -124,16 +131,15 @@ const BarcodeScannerModal = ({
     setIsProcessing(true);
 
     try {
-      // Haptic feedback
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate(80);
       }
 
-      const product = await searchProductByCode(trimmedCode);
+      const product = await propsRef.current.searchProductByCode(trimmedCode);
 
       if (product) {
-        if (soundEnabled) playBeep('success');
-        const result = onScanSuccess(product);
+        if (propsRef.current.soundEnabled) playBeep('success');
+        const result = propsRef.current.onScanSuccess(product);
         
         const historyItem = {
           id: Date.now(),
@@ -152,7 +158,7 @@ const BarcodeScannerModal = ({
           text: `Added: ${product.product_name} (${result?.action === 'incremented' ? 'Qty +1' : 'Added to bill'})`
         });
       } else {
-        if (soundEnabled) playBeep('error');
+        if (propsRef.current.soundEnabled) playBeep('error');
         const historyItem = {
           id: Date.now(),
           code: trimmedCode,
@@ -174,17 +180,23 @@ const BarcodeScannerModal = ({
     } finally {
       setIsProcessing(false);
     }
-  }, [isProcessing, searchProductByCode, onScanSuccess, soundEnabled]);
+  }, []);
 
-  // Start camera scanner
-  const startScanner = useCallback(async (cameraId = null) => {
+  // Start camera scanner with robust fallbacks
+  const startScanner = useCallback(async (targetCameraId = null) => {
+    if (isOperatingRef.current) return;
+    isOperatingRef.current = true;
+
     try {
       setCameraError(null);
       await stopScanner();
 
-      // Ensure viewport element exists
+      // Ensure viewport element exists in DOM
       const element = document.getElementById(containerId);
-      if (!element) return;
+      if (!element) {
+        isOperatingRef.current = false;
+        return;
+      }
 
       const html5QrCode = new Html5Qrcode(containerId, {
         formatsToSupport: [
@@ -205,37 +217,67 @@ const BarcodeScannerModal = ({
 
       scannerRef.current = html5QrCode;
 
-      // Get available cameras
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length > 0) {
-        setCameras(devices);
-        const selectedId = cameraId || (devices.length > 1 ? devices[devices.length - 1].id : devices[0].id);
-        setSelectedCameraId(selectedId);
+      const config = {
+        fps: 15,
+        qrbox: (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          return {
+            width: Math.floor(minEdge * 0.85),
+            height: Math.floor(minEdge * 0.55)
+          };
+        },
+        aspectRatio: 1.333333
+      };
 
-        const config = {
-          fps: 15,
-          qrbox: (viewfinderWidth, viewfinderHeight) => {
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            return {
-              width: Math.floor(minEdge * 0.85),
-              height: Math.floor(minEdge * 0.55)
-            };
-          },
-          aspectRatio: 1.333333
-        };
+      // Determine camera constraint strategy
+      let cameraConstraint;
+      if (targetCameraId) {
+        cameraConstraint = { deviceId: targetCameraId };
+      } else {
+        cameraConstraint = { facingMode: 'environment' };
+      }
 
+      // Try starting scanner
+      let startedSuccessfully = false;
+      try {
         await html5QrCode.start(
-          cameraId ? { deviceId: { exact: cameraId } } : { facingMode: 'environment' },
+          cameraConstraint,
           config,
-          (decodedText) => {
-            handleCodeFound(decodedText);
-          },
-          () => {
-            // Ignore frame scan errors
-          }
+          (decodedText) => handleCodeFound(decodedText),
+          () => {}
         );
+        startedSuccessfully = true;
+      } catch (firstErr) {
+        console.warn('First camera start attempt failed, trying fallback constraint:', firstErr);
+        // Fallback to user facing camera or general constraint if back camera constraint failed
+        try {
+          await html5QrCode.start(
+            { facingMode: 'user' },
+            config,
+            (decodedText) => handleCodeFound(decodedText),
+            () => {}
+          );
+          startedSuccessfully = true;
+        } catch (secondErr) {
+          throw firstErr; // Throw original error for parsing
+        }
+      }
 
+      if (startedSuccessfully) {
         setIsScanning(true);
+
+        // Fetch camera list asynchronously after permission is granted
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            setCameras(devices);
+            if (!targetCameraId && devices.length > 0) {
+              setSelectedCameraId(devices[0].id);
+            }
+          }
+        } catch (camErr) {
+          console.warn('Could not enumerate cameras list:', camErr);
+        }
 
         // Check torch support
         try {
@@ -248,29 +290,49 @@ const BarcodeScannerModal = ({
         } catch {
           setTorchSupported(false);
         }
-      } else {
-        setCameraError('No cameras found on your device.');
       }
     } catch (err) {
       console.error('Failed to start camera barcode scanner:', err);
-      setCameraError(err?.message || 'Unable to access camera. Please check permissions.');
+      let userErrorMsg = 'Unable to access camera. Please check permissions.';
+      
+      const errStr = (err?.message || err?.toString() || '').toLowerCase();
+      if (errStr.includes('permission') || errStr.includes('notallowed')) {
+        userErrorMsg = 'Camera access was denied. Please allow camera permissions in your browser URL bar and click Retry.';
+      } else if (errStr.includes('notreadable') || errStr.includes('in use') || errStr.includes('could not start')) {
+        userErrorMsg = 'Camera is currently in use by another app or browser tab. Please close it and click Retry.';
+      } else if (errStr.includes('notfound') || errStr.includes('no camera')) {
+        userErrorMsg = 'No active camera found on your device.';
+      } else if (err?.message) {
+        userErrorMsg = err.message;
+      }
+
+      setCameraError(userErrorMsg);
       setIsScanning(false);
+    } finally {
+      isOperatingRef.current = false;
     }
   }, [handleCodeFound, stopScanner]);
 
-  // Handle tab switch or modal open
+  // Handle modal open/close and tab switching cleanly
   useEffect(() => {
+    let timer;
     if (isOpen && activeTab === 'camera') {
-      const timer = setTimeout(() => {
+      setStatusMessage({ type: 'info', text: 'Point camera at any barcode or part number' });
+      timer = setTimeout(() => {
         startScanner();
-      }, 200);
-      return () => {
-        clearTimeout(timer);
-        stopScanner();
-      };
+      }, 150);
     } else {
       stopScanner();
+      if (!isOpen) {
+        setStatusMessage(null);
+        setCameraError(null);
+      }
     }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      stopScanner();
+    };
   }, [isOpen, activeTab, startScanner, stopScanner]);
 
   // Toggle Torch/Flashlight
@@ -312,7 +374,7 @@ const BarcodeScannerModal = ({
       }
     } catch (err) {
       console.error('Image scan failed:', err);
-      if (soundEnabled) playBeep('error');
+      if (propsRef.current.soundEnabled) playBeep('error');
       setStatusMessage({
         type: 'error',
         text: 'No clear barcode could be detected in this image. Try taking a closer photo or enter part number manually.'
@@ -491,7 +553,7 @@ const BarcodeScannerModal = ({
                     <p className="text-xs text-gray-300 mb-4 max-w-xs">{cameraError}</p>
                     <button
                       onClick={() => startScanner(selectedCameraId)}
-                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 shadow-md"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                       <span>Retry Camera</span>
