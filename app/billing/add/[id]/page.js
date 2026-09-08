@@ -15,6 +15,7 @@ import InvoiceHeader from './InvoiceHeader';
 import CustomerDetailsForm from './CustomerDetailsForm';
 import ProductsTable from './ProductsTable';
 import InvoiceSummary from './InvoiceSummary';
+import BarcodeScannerModal from './BarcodeScannerModal';
 
 // pdf send
 import { uploadInvoicePDF } from '@/utils/uploadInvoicePDF';
@@ -37,6 +38,7 @@ const InvoiceEstimateAdd = () => {
   const router = useRouter();
   const inputRefs = useRef({});
   const [photos, setPhotos] = useState([]);
+  const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
 
   // Date states
   const [invoiceDate, setInvoiceDate] = useState('');
@@ -471,6 +473,132 @@ const InvoiceEstimateAdd = () => {
     }
   };
 
+  // Search product by barcode (part_number, item_code, or product_name)
+  const searchProductByCode = async (scannedCode) => {
+    if (!scannedCode || !companyId) return null;
+    const cleanCode = scannedCode.trim();
+
+    try {
+      // 1. Try matching part_number
+      let { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('company_id', companyId)
+        .ilike('part_number', cleanCode)
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        return data[0];
+      }
+
+      // 2. Try matching item_code
+      const resCode = await supabase
+        .from('products')
+        .select('*')
+        .eq('company_id', companyId)
+        .ilike('item_code', cleanCode)
+        .limit(1);
+
+      if (!resCode.error && resCode.data && resCode.data.length > 0) {
+        return resCode.data[0];
+      }
+
+      // 3. Fallback: Try matching product_name
+      const resName = await supabase
+        .from('products')
+        .select('*')
+        .eq('company_id', companyId)
+        .ilike('product_name', `%${cleanCode}%`)
+        .limit(1);
+
+      if (!resName.error && resName.data && resName.data.length > 0) {
+        return resName.data[0];
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Error searching product by barcode:', err);
+      return null;
+    }
+  };
+
+  // Add scanned product from barcode scanner to bill
+  const handleAddProductFromBarcode = (foundProduct) => {
+    const rate = Number(foundProduct.selling_rate || foundProduct.purchase_rate || 0);
+    const gst = Number(foundProduct.gst_percentage || 0);
+
+    let action = 'added';
+
+    // Check if product already exists in current table
+    const existingIndex = products.findIndex(
+      p => p.productName && p.productName.trim().toLowerCase() === foundProduct.product_name.trim().toLowerCase()
+    );
+
+    if (existingIndex !== -1) {
+      setProducts(prev => prev.map((p, idx) => {
+        if (idx === existingIndex) {
+          const newQty = (Number(p.quantity) || 0) + 1;
+          const newTotal = calculateProductTotal(
+            newQty,
+            p.rate || rate,
+            p.gstPercentage !== undefined ? p.gstPercentage : gst
+          );
+          return {
+            ...p,
+            quantity: newQty,
+            rate: p.rate || rate,
+            gstPercentage: p.gstPercentage !== undefined ? p.gstPercentage : gst,
+            totalAmount: newTotal
+          };
+        }
+        return p;
+      }));
+      action = 'incremented';
+    } else {
+      // Check for first empty row
+      const emptyIndex = products.findIndex(
+        p => (!p.productName || p.productName.trim() === '') && (!p.rate || p.rate === '' || p.rate === 0)
+      );
+
+      const newRowData = {
+        productName: foundProduct.product_name,
+        hsnCode: foundProduct.hsn_code || '',
+        quantity: 1,
+        rate: rate,
+        gstPercentage: gst,
+        totalAmount: calculateProductTotal(1, rate, gst)
+      };
+
+      if (emptyIndex !== -1) {
+        const targetId = products[emptyIndex].id;
+        setProducts(prev => prev.map((p, idx) => {
+          if (idx === emptyIndex) {
+            return {
+              ...p,
+              ...newRowData
+            };
+          }
+          return p;
+        }));
+        setProductsFromDB(prev => new Set([...prev, targetId]));
+      } else {
+        const newId = Date.now();
+        setProducts(prev => [
+          ...prev,
+          {
+            id: newId,
+            serialNumber: prev.length + 1,
+            ...newRowData
+          }
+        ]);
+        setProductsFromDB(prev => new Set([...prev, newId]));
+      }
+      action = 'added';
+    }
+
+    return { product: foundProduct, action };
+  };
+
   const getNextInvoiceNumber = async () => {
     try {
       const { data, error } = await supabase.rpc('get_next_invoice_number');
@@ -856,6 +984,7 @@ const InvoiceEstimateAdd = () => {
             onDropdownToggle={(id, show) => setShowProductDropdown(prev => ({ ...prev, [id]: show }))}
             productsFromDB={productsFromDB}
             newlyAddedProducts={newlyAddedProducts}
+            onOpenBarcodeScanner={() => setIsBarcodeScannerOpen(true)}
           />
 
           <InvoiceSummary
@@ -880,6 +1009,14 @@ const InvoiceEstimateAdd = () => {
       </div>
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* Barcode Scanner Modal */}
+      <BarcodeScannerModal
+        isOpen={isBarcodeScannerOpen}
+        onClose={() => setIsBarcodeScannerOpen(false)}
+        onScanSuccess={handleAddProductFromBarcode}
+        searchProductByCode={searchProductByCode}
+      />
     </div>
   );
 };

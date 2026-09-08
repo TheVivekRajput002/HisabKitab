@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, Camera } from 'lucide-react';
 import ProductRow from './ProductRow';
 
 const ProductsTable = ({
@@ -17,11 +17,25 @@ const ProductsTable = ({
     searchingProduct,
     onDropdownToggle,
     productsFromDB,
-    newlyAddedProducts
+    newlyAddedProducts,
+    onOpenBarcodeScanner
 }) => {
     return (
         <div className="p-6 max-md:py-3 max-md:px-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">ITEMS</h3>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                    <h3 className="text-lg font-bold text-gray-800">ITEMS</h3>
+                    <button
+                        type="button"
+                        onClick={onOpenBarcodeScanner}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 active:bg-blue-200 border border-blue-200 rounded-lg text-xs md:text-sm font-semibold transition-all shadow-sm group cursor-pointer"
+                        title="Scan Barcode / Part Number with Camera"
+                    >
+                        <Camera className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
+                        <span>Scan Barcode</span>
+                    </button>
+                </div>
+            </div>
 
             <div>
                 <div className="border-2 border-gray-300 rounded-lg" style={{ overflow: 'visible' }}>
