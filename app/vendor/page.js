@@ -20,22 +20,11 @@ function Alert({ children, variant = 'info', className = '' }) {
     return <div className={`border rounded-lg p-4 ${variants[variant]} ${className}`}>{children}</div>;
 }
 
-function Badge({ children, variant = 'default', className = '' }) {
-    const variants = {
-        default: 'bg-gray-100 text-gray-800',
-        success: 'bg-green-100 text-green-800',
-        warning: 'bg-yellow-100 text-yellow-800',
-        error: 'bg-red-100 text-red-800',
-        info: 'bg-blue-100 text-blue-800'
-    };
-    return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${variants[variant]} ${className}`}>{children}</span>;
-}
-
 // ============================================================================
-// VENDOR CARD COMPONENT
+// VENDOR TABLE ROW COMPONENT
 // ============================================================================
 
-function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
+function VendorTableRow({ index, vendor, onEdit, onDelete, onViewBills, onViewPayments, onViewLedger }) {
     const [billStats, setBillStats] = useState({ total: 0, unpaid: 0, totalAmount: 0 });
     const [loading, setLoading] = useState(true);
 
@@ -53,9 +42,9 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
             if (error) throw error;
 
             const stats = {
-                total: bills.length,
-                unpaid: bills.filter(b => b.payment_status === 'unpaid').length,
-                totalAmount: bills.reduce((sum, b) => sum + Number(b.total_amount), 0)
+                total: bills?.length || 0,
+                unpaid: bills?.filter(b => b.payment_status === 'unpaid').length || 0,
+                totalAmount: bills?.reduce((sum, b) => sum + Number(b.total_amount || 0), 0) || 0
             };
 
             setBillStats(stats);
@@ -67,85 +56,98 @@ function VendorCard({ vendor, onEdit, onDelete, onViewBills, onViewPayments }) {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-5 hover:shadow-lg transition-shadow">
-            {/* Header */}
-            <div className="flex items-start justify-between mb-4">
+        <tr className="hover:bg-blue-50/50 transition-colors">
+            <td className="py-3.5 px-4 text-center text-gray-500 font-medium">{index + 1}</td>
+            <td className="py-3.5 px-4 cursor-pointer group" onClick={() => onViewLedger(vendor)}>
                 <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                        <Building2 className="text-blue-600" size={24} />
+                    <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 shrink-0 font-bold group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <Building2 size={18} />
                     </div>
                     <div>
-                        <h3 className="font-bold text-lg text-gray-800">{vendor.name}</h3>
-                        {vendor.gstin && (
-                            <p className="text-sm text-gray-500 font-mono">GSTIN: {vendor.gstin}</p>
+                        <p className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors flex items-center gap-1.5">
+                            {vendor.name}
+                        </p>
+                        {vendor.gstin ? (
+                            <p className="text-xs text-gray-500 font-mono">GSTIN: {vendor.gstin}</p>
+                        ) : (
+                            <p className="text-xs text-gray-400">No GSTIN</p>
                         )}
                     </div>
                 </div>
-                <div className="flex gap-2">
+            </td>
+            <td className="py-3.5 px-4 text-center">
+                {loading ? (
+                    <Loader2 className="animate-spin text-gray-400 mx-auto" size={16} />
+                ) : (
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                        {billStats.total} bills
+                    </span>
+                )}
+            </td>
+            <td className="py-3.5 px-4 text-center">
+                {loading ? (
+                    <Loader2 className="animate-spin text-gray-400 mx-auto" size={16} />
+                ) : (
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        billStats.unpaid > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                        {billStats.unpaid} unpaid
+                    </span>
+                )}
+            </td>
+            <td className="py-3.5 px-4 text-right font-bold text-gray-900">
+                {loading ? (
+                    <Loader2 className="animate-spin text-gray-400 ml-auto" size={16} />
+                ) : (
+                    `₹${billStats.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+                )}
+            </td>
+            <td className="py-3.5 px-4 text-center text-xs text-gray-500">
+                {new Date(vendor.created_at).toLocaleDateString('en-GB')}
+            </td>
+            <td className="py-3.5 px-4 text-center">
+                <div className="flex items-center justify-center gap-1.5">
                     <button
-                        onClick={() => onEdit(vendor)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit Vendor"
+                        onClick={() => onViewLedger(vendor)}
+                        className="px-2.5 py-1.5 bg-gray-900 hover:bg-black text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm cursor-pointer"
+                        title="View Vendor Statement Ledger"
                     >
-                        <Edit2 size={18} />
+                        <FileText size={13} />
+                        <span>Ledger</span>
                     </button>
-                    <button
-                        onClick={() => onDelete(vendor.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete Vendor"
-                    >
-                        <Trash2 size={18} />
-                    </button>
-                </div>
-            </div>
-
-            {/* Stats */}
-            {loading ? (
-                <div className="flex items-center justify-center py-4">
-                    <Loader2 className="animate-spin text-gray-400" size={20} />
-                </div>
-            ) : (
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                    <div className="bg-blue-50 rounded-lg p-3 text-center">
-                        <FileText className="mx-auto mb-1 text-blue-600" size={20} />
-                        <p className="text-2xl font-bold text-blue-900">{billStats.total}</p>
-                        <p className="text-xs text-blue-600">Total Bills</p>
-                    </div>
-                    <div className="bg-yellow-50 rounded-lg p-3 text-center">
-                        <AlertCircle className="mx-auto mb-1 text-yellow-600" size={20} />
-                        <p className="text-2xl font-bold text-yellow-900">{billStats.unpaid}</p>
-                        <p className="text-xs text-yellow-600">Unpaid</p>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-3 text-center">
-                        <DollarSign className="mx-auto mb-1 text-green-600" size={20} />
-                        <p className="text-lg font-bold text-green-900">₹{billStats.totalAmount.toFixed(0)}</p>
-                        <p className="text-xs text-green-600">Total Amount</p>
-                    </div>
-                </div>
-            )}
-
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-3 border-t">
-                <p className="text-xs text-gray-500">
-                    <Calendar size={12} className="inline mr-1" />
-                    Added: {new Date(vendor.created_at).toLocaleDateString('en-GB')}
-                </p>
-                <div className="flex gap-2">
                     <button
                         onClick={() => onViewPayments(vendor)}
-                        className="px-3 py-1.5 bg-green-50 text-green-700 text-sm rounded-lg hover:bg-green-100 transition-colors flex items-center gap-1 border border-green-200"
+                        className="px-2.5 py-1.5 bg-green-50 text-green-700 hover:bg-green-100 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 border border-green-200 cursor-pointer"
+                        title="View Payments"
                     >
-                        <CreditCard size={14} /> View Payments
+                        <CreditCard size={13} />
+                        <span className="max-sm:hidden">Payments</span>
                     </button>
                     <button
                         onClick={() => onViewBills(vendor)}
-                        className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                        className="px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 border border-blue-200 cursor-pointer"
+                        title="View Bills"
                     >
-                        <FileText size={14} /> View Bills
+                        <FileText size={13} />
+                        <span className="max-sm:hidden">Bills</span>
+                    </button>
+                    <button
+                        onClick={() => onEdit(vendor)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                        title="Edit Vendor"
+                    >
+                        <Edit2 size={16} />
+                    </button>
+                    <button
+                        onClick={() => onDelete(vendor.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Delete Vendor"
+                    >
+                        <Trash2 size={16} />
                     </button>
                 </div>
-            </div>
-        </div>
+            </td>
+        </tr>
     );
 }
 
@@ -378,6 +380,10 @@ export default function VendorPage() {
         router.push(`/vendor/${vendor.id}/payments`);
     };
 
+    const handleViewLedger = (vendor) => {
+        router.push(`/vendor/${vendor.id}`);
+    };
+
     return (
         <div className="min-h-screen bg-gray-100 p-4">
             <div className="max-w-7xl mx-auto">
@@ -410,26 +416,25 @@ export default function VendorPage() {
                         </div>
                         <button
                             onClick={() => router.push('/vendor/scanner')}
-                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center"
+                            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 justify-center cursor-pointer"
                         >
                             <ScanLine size={20} />
                             Register Vendor Bill
                         </button>
                         <button
                             onClick={() => router.push('/vendor/pay')}
-                            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 justify-center"
+                            className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2 justify-center cursor-pointer"
                         >
                             <CreditCard size={20} />
                             Pay to Vendor
                         </button>
                         <button
                             onClick={() => setShowForm(true)}
-                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 justify-center"
+                            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 justify-center cursor-pointer"
                         >
                             <Plus size={20} />
                             Add Vendor
                         </button>
-
                     </div>
                 </div>
 
@@ -470,7 +475,7 @@ export default function VendorPage() {
                     </div>
                 </div>
 
-                {/* Vendors Grid */}
+                {/* Vendors Table */}
                 {loading ? (
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="animate-spin text-blue-600" size={48} />
@@ -489,7 +494,7 @@ export default function VendorPage() {
                         {!searchQuery && (
                             <button
                                 onClick={() => setShowForm(true)}
-                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2"
+                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 cursor-pointer"
                             >
                                 <Plus size={20} />
                                 Add Your First Vendor
@@ -497,17 +502,36 @@ export default function VendorPage() {
                         )}
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredVendors.map((vendor) => (
-                            <VendorCard
-                                key={vendor.id}
-                                vendor={vendor}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onViewBills={handleViewBills}
-                                onViewPayments={handleViewPayments}
-                            />
-                        ))}
+                    <div className="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse min-w-[850px]">
+                                <thead>
+                                    <tr className="bg-gray-800 text-white text-xs sm:text-sm font-semibold uppercase tracking-wider">
+                                        <th className="py-3.5 px-4 text-center w-12">#</th>
+                                        <th className="py-3.5 px-4">Vendor Details</th>
+                                        <th className="py-3.5 px-4 text-center">Total Bills</th>
+                                        <th className="py-3.5 px-4 text-center">Unpaid</th>
+                                        <th className="py-3.5 px-4 text-right">Total Amount</th>
+                                        <th className="py-3.5 px-4 text-center">Added Date</th>
+                                        <th className="py-3.5 px-4 text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 text-sm">
+                                    {filteredVendors.map((vendor, index) => (
+                                        <VendorTableRow
+                                            key={vendor.id}
+                                            index={index}
+                                            vendor={vendor}
+                                            onEdit={handleEdit}
+                                            onDelete={handleDelete}
+                                            onViewBills={handleViewBills}
+                                            onViewPayments={handleViewPayments}
+                                            onViewLedger={handleViewLedger}
+                                        />
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 )}
 
