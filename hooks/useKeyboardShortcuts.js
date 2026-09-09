@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 /**
  * Custom hook for global keyboard shortcuts
@@ -9,9 +9,13 @@ import { useRouter } from 'next/navigation';
  */
 export const useKeyboardShortcuts = (shortcuts = {}) => {
     const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         const handleKeyDown = (e) => {
+            // Ignore if event was already handled by an inner component/modal
+            if (e.defaultPrevented) return;
+
             // Build the key combination string
             const key = e.key.toLowerCase();
             const ctrl = e.ctrlKey;
@@ -30,18 +34,32 @@ export const useKeyboardShortcuts = (shortcuts = {}) => {
                 combination = e.key.toLowerCase();
             }
 
-            // Check if we have a handler for this combination
+            // Check if we have a custom handler for this combination
             const handler = shortcuts[combination];
             if (handler) {
                 e.preventDefault();
                 handler(e, router);
+                return;
             }
 
-            // Global shortcuts (always active)
+            // Global shortcuts (always active when not overridden)
             switch (combination) {
                 case 'escape':
                     if (!shortcuts['escape']) {
-                        router.back();
+                        e.preventDefault();
+                        const activeEl = document.activeElement;
+                        const isInputFocused = activeEl && (
+                            activeEl.tagName === 'INPUT' ||
+                            activeEl.tagName === 'TEXTAREA' ||
+                            activeEl.tagName === 'SELECT' ||
+                            activeEl.isContentEditable
+                        );
+
+                        if (isInputFocused) {
+                            activeEl.blur();
+                        } else if (pathname !== '/') {
+                            router.back();
+                        }
                     }
                     break;
                 case 'f8':
@@ -61,7 +79,7 @@ export const useKeyboardShortcuts = (shortcuts = {}) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [shortcuts, router]);
+    }, [shortcuts, router, pathname]);
 };
 
 /**

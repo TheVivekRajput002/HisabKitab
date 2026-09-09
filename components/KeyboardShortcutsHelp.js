@@ -2,9 +2,20 @@
 
 import React, { useState } from 'react';
 import { Keyboard, X } from 'lucide-react';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 
 const KeyboardShortcutsHelp = () => {
     const [isOpen, setIsOpen] = useState(false);
+
+    useKeyboardShortcuts(
+        isOpen
+            ? {
+                escape: () => setIsOpen(false),
+            }
+            : {
+                '?': () => setIsOpen(prev => !prev),
+            }
+    );
 
     const shortcuts = [
         { key: 'Esc', description: 'Back / Cancel / Exit current screen' },
