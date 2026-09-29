@@ -104,17 +104,17 @@ const InvoiceSearch = () => {
         query = query.lte('bill_date', filters.dateTo);
       }
 
-      // Sorting
+      // Sorting — secondary sort by created_at desc keeps same-date invoices in newest-first order
       if (sortBy === 'date-desc') {
-        query = query.order('bill_date', { ascending: false });
+        query = query.order('bill_date', { ascending: false }).order('created_at', { ascending: false });
       } else if (sortBy === 'date-asc') {
-        query = query.order('bill_date', { ascending: true });
+        query = query.order('bill_date', { ascending: true }).order('created_at', { ascending: false });
       } else if (sortBy === 'amount-desc') {
-        query = query.order('total_amount', { ascending: false });
+        query = query.order('total_amount', { ascending: false }).order('created_at', { ascending: false });
       } else if (sortBy === 'amount-asc') {
-        query = query.order('total_amount', { ascending: true });
+        query = query.order('total_amount', { ascending: true }).order('created_at', { ascending: false });
       } else {
-        query = query.order('bill_date', { ascending: false });
+        query = query.order('created_at', { ascending: false });
       }
 
       // Pagination

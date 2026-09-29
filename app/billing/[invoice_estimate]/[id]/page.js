@@ -338,6 +338,21 @@ const InvoiceViewEdit = () => {
         setIsEditMode(false);
     };
 
+    // Ctrl+E → trigger Edit button
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') {
+                e.preventDefault();
+                if (!isEditMode) {
+                    setIsEditMode(true);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isEditMode]);
+
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         return new Date(dateString).toLocaleDateString('en-IN');

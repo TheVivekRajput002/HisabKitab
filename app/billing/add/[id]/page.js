@@ -781,10 +781,10 @@ const InvoiceEstimateAdd = () => {
         serial_number: product.serialNumber,
         product_name: product.productName,
         hsn_code: product.hsnCode,
-        quantity: product.quantity,
-        rate: product.rate,
-        gst_percentage: product.gstPercentage,
-        total_product: product.totalAmount
+        quantity: parseFloat(product.quantity) || 0,
+        rate: parseFloat(product.rate) || 0,
+        gst_percentage: parseFloat(product.gstPercentage) || 0,
+        total_product: parseFloat(product.totalAmount) || 0
       }));
 
       const { error: itemsInsertError } = await supabase
@@ -924,20 +924,71 @@ const InvoiceEstimateAdd = () => {
 
   const canSave = customerDetails.customerName && customerDetails.phoneNumber && !phoneError && customerDetails.phoneNumber.length === 10;
 
-  // Ctrl+S keyboard shortcut to save
+  // Refs to always hold the latest values — prevents stale closures in the keyboard shortcut listener
+  const saveInvoiceRef = useRef(null);
+  const canSaveRef = useRef(canSave);
+  const savingRef = useRef(saving);
+  const invoiceSavedRef = useRef(invoiceSaved);
+  const savedInvoiceDataRef = useRef(savedInvoiceData);
+  const isInvoiceRef = useRef(isInvoice);
+
+  // Keep refs in sync with the latest render values
+  saveInvoiceRef.current = saveInvoice;
+  canSaveRef.current = canSave;
+  savingRef.current = saving;
+  invoiceSavedRef.current = invoiceSaved;
+  savedInvoiceDataRef.current = savedInvoiceData;
+  isInvoiceRef.current = isInvoice;
+
+  // Keyboard shortcuts: Ctrl+S (save), Ctrl+P (print), Ctrl+E (edit)
+  // Empty deps — the listener is registered once; all values are read via refs so they're always fresh
   useEffect(() => {
-    const handleCtrlS = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-        e.preventDefault();
-        if (canSave && !saving) {
-          saveInvoice();
-        }
+    const handleShortcuts = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+
+      switch (e.key.toLowerCase()) {
+        case 's':
+          // Ctrl+S → Save bill
+          e.preventDefault();
+          if (canSaveRef.current && !savingRef.current) {
+            saveInvoiceRef.current?.();
+          }
+          break;
+
+        case 'p':
+          // Ctrl+P → Download/print PDF if saved, else browser print
+          e.preventDefault();
+          if (invoiceSavedRef.current) {
+            const pdfLink = document.getElementById('pdf-download-link');
+            if (pdfLink) {
+              pdfLink.click();
+            }
+          } else {
+            window.print();
+          }
+          break;
+
+        case 'e':
+          // Ctrl+E → Edit: if bill is saved, navigate to edit page;
+          // otherwise focus the first editable field (customer name)
+          e.preventDefault();
+          if (invoiceSavedRef.current && savedInvoiceDataRef.current) {
+            const invoiceId = savedInvoiceDataRef.current.invoice.id;
+            router.push(`/billing/${isInvoiceRef.current ? 'invoice' : 'estimate'}/edit/${invoiceId}`);
+          } else {
+            const firstInput = inputRefs.current['customerName'];
+            if (firstInput) firstInput.focus();
+          }
+          break;
+
+        default:
+          break;
       }
     };
 
-    window.addEventListener('keydown', handleCtrlS);
-    return () => window.removeEventListener('keydown', handleCtrlS);
-  }, [canSave, saving]);
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">

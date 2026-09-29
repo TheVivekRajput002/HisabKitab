@@ -148,6 +148,7 @@ const InvoiceSummary = ({
                                     />
                                 }
                                 fileName={`Invoice-${savedInvoiceData.invoice.invoice_number}.pdf`}
+                                id="pdf-download-link"
                                 className="flex items-center px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-lg shadow-lg"
                             >
                                 {({ loading }) =>
