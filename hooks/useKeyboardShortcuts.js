@@ -29,16 +29,18 @@ export const useKeyboardShortcuts = (shortcuts = {}) => {
             if (shift) combination += 'shift+';
             combination += key;
 
-            // Handle function keys separately
-            if (e.key.startsWith('F')) {
+            // Handle function keys separately (F1–F12 only, not Shift+F etc.)
+            if (/^F\d{1,2}$/.test(e.key)) {
                 combination = e.key.toLowerCase();
             }
 
-            // Check if we have a custom handler for this combination
+            // Check if we have a custom handler for this combination.
+            // A handler may return `false` to let the event pass through untouched.
             const handler = shortcuts[combination];
             if (handler) {
-                e.preventDefault();
-                handler(e, router);
+                if (handler(e, router) !== false) {
+                    e.preventDefault();
+                }
                 return;
             }
 

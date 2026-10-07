@@ -7,26 +7,48 @@ import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 const KeyboardShortcutsHelp = () => {
     const [isOpen, setIsOpen] = useState(false);
 
+    const toggleHelp = () => {
+        // Don't hijack '?' while the user is typing in a field
+        const el = document.activeElement;
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return false;
+        setIsOpen(prev => !prev);
+    };
+
     useKeyboardShortcuts(
         isOpen
             ? {
                 escape: () => setIsOpen(false),
             }
             : {
-                '?': () => setIsOpen(prev => !prev),
+                // '?' is typed with Shift on most layouts, so the hook reports 'shift+?'
+                '?': toggleHelp,
+                'shift+?': toggleHelp,
             }
     );
 
-    const shortcuts = [
-        { key: 'Esc', description: 'Back / Cancel / Exit current screen' },
-        { key: 'F8', description: 'Create Sales Invoice' },
-        { key: 'Ctrl + A', description: 'Save' },
-        { key: 'Alt + C', description: 'Create customer/item inline' },
-        { key: 'Alt + D', description: 'Delete invoice' },
-        { key: 'Alt + 2', description: 'Duplicate invoice' },
-        { key: 'F12', description: 'Invoice settings' },
-        { key: 'Alt + F2', description: 'Change invoice date' },
-        { key: 'Ctrl + P', description: 'Print / PDF' },
+    // Only shortcuts that are actually implemented in the app
+    const shortcutGroups = [
+        {
+            title: 'Global',
+            shortcuts: [
+                { key: 'Esc', description: 'Leave input field / Go back' },
+            ],
+        },
+        {
+            title: 'Create Invoice / Estimate',
+            shortcuts: [
+                { key: 'Ctrl + S', description: 'Save bill' },
+                { key: 'Ctrl + P', description: 'Download PDF (after save) / Print' },
+                { key: 'Ctrl + E', description: 'Edit saved bill / Focus customer name' },
+                { key: 'Enter / →', description: 'Next field (adds new row at end)' },
+            ],
+        },
+        {
+            title: 'View Invoice / Estimate',
+            shortcuts: [
+                { key: 'Ctrl + E', description: 'Switch to edit mode' },
+            ],
+        },
     ];
 
     return (
@@ -57,17 +79,24 @@ const KeyboardShortcutsHelp = () => {
                         </div>
 
                         {/* Shortcuts List */}
-                        <div className="p-6 max-h-96 overflow-y-auto">
-                            <div className="space-y-3">
-                                {shortcuts.map((shortcut, index) => (
-                                    <div key={index} className="flex items-center justify-between py-2">
-                                        <span className="text-gray-700">{shortcut.description}</span>
-                                        <kbd className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-mono text-gray-800 whitespace-nowrap">
-                                            {shortcut.key}
-                                        </kbd>
+                        <div className="p-6 max-h-[60vh] overflow-y-auto space-y-5">
+                            {shortcutGroups.map((group) => (
+                                <section key={group.title}>
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                                        {group.title}
+                                    </h3>
+                                    <div className="space-y-1">
+                                        {group.shortcuts.map((shortcut) => (
+                                            <div key={shortcut.key + shortcut.description} className="flex items-center justify-between gap-4 py-1.5">
+                                                <span className="text-gray-700 text-sm">{shortcut.description}</span>
+                                                <kbd className="px-3 py-1 bg-gray-100 border border-gray-300 rounded text-sm font-mono text-gray-800 whitespace-nowrap">
+                                                    {shortcut.key}
+                                                </kbd>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                </section>
+                            ))}
                         </div>
 
                         {/* Footer */}

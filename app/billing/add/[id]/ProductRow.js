@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Trash2 } from 'lucide-react';
+
+const DROPDOWN_MAX_HEIGHT = 240; // matches max-h-60
 
 const ProductRow = ({
     product,
@@ -39,6 +42,43 @@ const ProductRow = ({
         }
     }, [highlightedIndex]);
 
+    // Position the dropdown (rendered in a portal) relative to the input,
+    // so it isn't clipped by the table's overflow container.
+    const [dropdownPos, setDropdownPos] = useState(null);
+    const isDropdownOpen = showDropdown && searchResults?.length > 0;
+
+    useLayoutEffect(() => {
+        if (!isDropdownOpen) {
+            setDropdownPos(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            const input = inputRefs.current[`${product.id}-productName`];
+            if (!input) return;
+            const rect = input.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+            const openUp = spaceBelow < DROPDOWN_MAX_HEIGHT + 8 && spaceAbove > spaceBelow;
+
+            setDropdownPos({
+                left: rect.left,
+                width: rect.width,
+                top: openUp ? undefined : rect.bottom + 4,
+                bottom: openUp ? window.innerHeight - rect.top + 4 : undefined,
+                maxHeight: Math.min(DROPDOWN_MAX_HEIGHT, (openUp ? spaceAbove : spaceBelow) - 12)
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isDropdownOpen, searchResults, product.id, inputRefs]);
+
     const handleProductNameKeyDown = (e) => {
         if (showDropdown && searchResults?.length > 0) {
             if (e.key === 'ArrowDown') {
@@ -73,12 +113,19 @@ const ProductRow = ({
         onKeyDown(e, `${product.id}-productName`, product.id);
     };
 
-    const renderDropdown = () => (
-        <>
-            {showDropdown && searchResults?.length > 0 && (
+    const renderDropdown = () => {
+        if (!isDropdownOpen || !dropdownPos || typeof document === 'undefined') return null;
+
+        return createPortal(
                 <div
-                    className="absolute bg-white border-2 border-gray-300 rounded-lg shadow-2xl max-h-60 overflow-y-auto w-full left-0 z-[9999]"
-                    style={{ top: 'calc(100% + 4px)' }}
+                    className="fixed bg-white border-2 border-gray-300 rounded-lg shadow-2xl overflow-y-auto z-[9999]"
+                    style={{
+                        top: dropdownPos.top,
+                        bottom: dropdownPos.bottom,
+                        left: dropdownPos.left,
+                        width: dropdownPos.width,
+                        maxHeight: Math.max(dropdownPos.maxHeight, 120)
+                    }}
                 >
                     {searchResults.map((item, idx) => (
                         <div
@@ -120,10 +167,10 @@ const ProductRow = ({
                             </div>
                         </div>
                     ))}
-                </div>
-            )}
-        </>
-    );
+                </div>,
+            document.body
+        );
+    };
 
     if (viewMode === 'card') {
         return (
