@@ -790,7 +790,21 @@ export default function VendorPayPage() {
             const payload = JSON.parse(raw);
             if (String(payload?.vendorId) !== String(vendorId)) return;
             if (payload?.data) {
-                handleCheckExtracted(payload.data);
+                let imgFile = null;
+                if (payload.imageBase64) {
+                    try {
+                        const byteCharacters = atob(payload.imageBase64);
+                        const byteNumbers = new Array(byteCharacters.length);
+                        for (let i = 0; i < byteCharacters.length; i++) {
+                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        }
+                        const byteArray = new Uint8Array(byteNumbers);
+                        imgFile = new File([byteArray], 'scanned-cheque.jpg', { type: 'image/jpeg' });
+                    } catch (e) {
+                        console.error('Error restoring image from prefill:', e);
+                    }
+                }
+                handleCheckExtracted(payload.data, imgFile);
             }
             sessionStorage.removeItem('vendor_pay_prefill');
         } catch {

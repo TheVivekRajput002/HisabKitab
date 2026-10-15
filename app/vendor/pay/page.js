@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useMemo, useRef, useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { ArrowLeft, ScanLine, Loader2, Search, CreditCard, Upload, X, Building2, Crop, PenSquare, Camera } from "lucide-react";
+import { ArrowLeft, ScanLine, Loader2, Search, CreditCard, Upload, X, Building2, Crop, PenSquare, Camera, CheckCircle2, AlertCircle, FileText, Check, DollarSign, Calendar } from "lucide-react";
 import "react-image-crop/dist/ReactCrop.css";
 import { supabase } from "@/utils/supabaseClient";
 import { useCompany } from "@/hooks/useCompany";
@@ -234,7 +234,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
             jsonStr = jsonStr.replace(/,(\s*[}\]])/g, "$1");
             const data = JSON.parse(jsonStr);
 
-            onExtracted(data);
+            onExtracted(data, base64);
             onClose();
         } catch (err) {
             setError(err.message || "Failed to scan document.");
@@ -342,49 +342,176 @@ function CheckScannerModal({ onExtracted, onClose }) {
     );
 }
 
-export default function VendorPayPickerPage() {
+// ============================================================================
+// HELPER FUNCTIONS FOR FUZZY & NORMALIZED VENDOR MATCHING
+// ============================================================================
+
+function cleanString(str) {
+    if (!str) return "";
+    return str
+        .toLowerCase()
+        .replace(/\b(m\/s\.?|messrs\.?|shree|shri|pay\s+to|pay|or\s+bearer|a\/c\s+payee|m\/s|ms)\b/gi, " ")
+        .replace(/\b(pvt\.?|private|ltd\.?|limited|llp|corp\.?|co\.?|company)\b/gi, " ")
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function wordMatch(qw, vw) {
+    if (qw === vw) return true;
+    if (qw.length > 2 && vw.length > 2) {
+        if (vw.startsWith(qw) || qw.startsWith(vw)) return true;
+    }
+    return false;
+}
+
+function matchScore(query, vendor) {
+    if (!query || !vendor?.name) return 0;
+
+    // Check GSTIN exact match
+    if (vendor.gstin && query.trim().toUpperCase() === vendor.gstin.toUpperCase()) {
+        return 100;
+    }
+
+    const cleanQ = cleanString(query);
+    const cleanV = cleanString(vendor.name);
+    if (!cleanQ || !cleanV) return 0;
+
+    // 1. Exact cleaned match
+    if (cleanQ === cleanV) return 100;
+
+    // 2. Compact match (ignoring all spaces e.g. "hm enterprises" vs "h m enterprises")
+    const compactQ = cleanQ.replace(/\s+/g, "");
+    const compactV = cleanV.replace(/\s+/g, "");
+    if (compactQ === compactV) return 98;
+
+    // 3. Prefix match for initials / abbreviations (e.g. "hm" starts "hmenterprises")
+    if (compactQ.length >= 2 && compactV.startsWith(compactQ)) {
+        return 85;
+    }
+
+    // 4. Substring inclusion match with ratio weighting
+    if (compactV.includes(compactQ) || compactQ.includes(compactV)) {
+        const ratio = Math.min(compactQ.length, compactV.length) / Math.max(compactQ.length, compactV.length);
+        if (ratio > 0.35) return 75 + Math.round(ratio * 20);
+        if (compactQ.length >= 3) return 65;
+    }
+
+    // 5. Word token matching
+    const qWords = cleanQ.split(" ").filter(Boolean);
+    const vWords = cleanV.split(" ").filter(Boolean);
+    let matchedWords = 0;
+    for (const qw of qWords) {
+        if (vWords.some(vw => wordMatch(qw, vw))) {
+            matchedWords++;
+        }
+    }
+    if (matchedWords === qWords.length && qWords.length > 0) {
+        return 70 + Math.round((matchedWords / vWords.length) * 25);
+    }
+    if (matchedWords > 0) {
+        return Math.round((matchedWords / Math.max(qWords.length, vWords.length)) * 60);
+    }
+
+    return 0;
+}
+
+function VendorPayPickerContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { companyId } = useCompany();
 
-    const [vendorIdInput, setVendorIdInput] = useState("");
+    const [allVendors, setAllVendors] = useState([]);
+    const [loadingVendors, setLoadingVendors] = useState(false);
     const [payeeName, setPayeeName] = useState("");
     const [matchedVendors, setMatchedVendors] = useState([]);
     const [selectedVendorId, setSelectedVendorId] = useState("");
     const [loadingMatch, setLoadingMatch] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
     const [error, setError] = useState(null);
     const [showScanner, setShowScanner] = useState(false);
     const [extractedCheckData, setExtractedCheckData] = useState(null);
+    const [scannedImageBase64, setScannedImageBase64] = useState(null);
+    const [vendorSearchFilter, setVendorSearchFilter] = useState("");
 
-    const canContinue = useMemo(() => {
-        return Boolean(selectedVendorId || vendorIdInput.trim());
-    }, [selectedVendorId, vendorIdInput]);
+    // Load all vendors on mount and when companyId is available
+    useEffect(() => {
+        const fetchVendors = async () => {
+            setLoadingVendors(true);
+            try {
+                let query = supabase.from("vendors").select("id, name, gstin");
+                if (companyId) {
+                    query = query.eq("company_id", companyId);
+                }
+                const { data, error: fetchErr } = await query.order("name", { ascending: true });
+                if (fetchErr) throw fetchErr;
+                setAllVendors(data || []);
+            } catch (err) {
+                console.error("Error loading vendors:", err);
+            } finally {
+                setLoadingVendors(false);
+            }
+        };
 
-    const findVendorsByPayee = async (name) => {
-        if (!name || !companyId) return;
+        fetchVendors();
+    }, [companyId]);
+
+    // Pre-select vendor if passed in URL query param
+    useEffect(() => {
+        const queryVendorId = searchParams?.get("vendorId");
+        if (queryVendorId) {
+            setSelectedVendorId(queryVendorId);
+        }
+    }, [searchParams]);
+
+    // Matching logic with fuzzy & normalized scoring
+    const findVendorsByPayee = async (name, currentVendors) => {
+        const query = (name || payeeName || "").trim();
+        if (!query) return;
+
         setLoadingMatch(true);
+        setHasSearched(true);
         setError(null);
-        try {
-            const { data, error: fetchError } = await supabase
-                .from("vendors")
-                .select("id, name, gstin")
-                .eq("company_id", companyId)
-                .ilike("name", `%${name.trim()}%`)
-                .order("name", { ascending: true });
 
-            if (fetchError) throw fetchError;
-            setMatchedVendors(data || []);
-            if (data?.length === 1) {
-                setSelectedVendorId(String(data[0].id));
+        try {
+            let vendorList = currentVendors || allVendors;
+
+            // If vendors list is not loaded yet, fetch directly from DB
+            if (!vendorList || vendorList.length === 0) {
+                let q = supabase.from("vendors").select("id, name, gstin");
+                if (companyId) {
+                    q = q.eq("company_id", companyId);
+                }
+                const { data, error: fetchErr } = await q.order("name", { ascending: true });
+                if (fetchErr) throw fetchErr;
+                vendorList = data || [];
+                setAllVendors(vendorList);
+            }
+
+            // Calculate match scores
+            const scored = vendorList
+                .map((v) => ({ ...v, score: matchScore(query, v) }))
+                .filter((v) => v.score >= 50)
+                .sort((a, b) => b.score - a.score);
+
+            setMatchedVendors(scored);
+
+            // If there is a high confidence match, auto-select it
+            if (scored.length > 0 && scored[0].score >= 70) {
+                setSelectedVendorId(String(scored[0].id));
             }
         } catch (err) {
-            setError(err.message);
+            setError(err.message || "Failed to search vendors");
         } finally {
             setLoadingMatch(false);
         }
     };
 
-    const handleExtracted = async (data) => {
+    const handleExtracted = async (data, base64) => {
         setExtractedCheckData(data || null);
+        if (base64) {
+            setScannedImageBase64(base64);
+        }
         const extractedPayee = data?.payee_name || data?.pay_name || "";
         setPayeeName(extractedPayee);
         if (extractedPayee) {
@@ -397,19 +524,45 @@ export default function VendorPayPickerPage() {
     };
 
     const handleContinue = () => {
-        const finalVendorId = selectedVendorId || vendorIdInput.trim();
-        if (!finalVendorId) return;
+        if (!selectedVendorId) return;
+
         if (extractedCheckData) {
-            sessionStorage.setItem(
-                "vendor_pay_prefill",
-                JSON.stringify({
-                    vendorId: String(finalVendorId),
-                    data: extractedCheckData,
-                })
-            );
+            const prefillObj = {
+                vendorId: String(selectedVendorId),
+                data: extractedCheckData,
+            };
+            if (scannedImageBase64 && scannedImageBase64.length < 3 * 1024 * 1024) {
+                prefillObj.imageBase64 = scannedImageBase64;
+            }
+            try {
+                sessionStorage.setItem("vendor_pay_prefill", JSON.stringify(prefillObj));
+            } catch {
+                delete prefillObj.imageBase64;
+                sessionStorage.setItem("vendor_pay_prefill", JSON.stringify(prefillObj));
+            }
         }
-        router.push(`/vendor/${finalVendorId}/pay`);
+        router.push(`/vendor/${selectedVendorId}/pay`);
     };
+
+    // Selected vendor entity
+    const selectedVendor = useMemo(() => {
+        return (
+            allVendors.find((v) => String(v.id) === String(selectedVendorId)) ||
+            matchedVendors.find((v) => String(v.id) === String(selectedVendorId)) ||
+            null
+        );
+    }, [allVendors, matchedVendors, selectedVendorId]);
+
+    // Filtered vendor list for manual picker
+    const filteredAllVendors = useMemo(() => {
+        if (!vendorSearchFilter.trim()) return allVendors;
+        const q = vendorSearchFilter.toLowerCase();
+        return allVendors.filter(
+            (v) =>
+                v.name.toLowerCase().includes(q) ||
+                (v.gstin && v.gstin.toLowerCase().includes(q))
+        );
+    }, [allVendors, vendorSearchFilter]);
 
     return (
         <div className="min-h-screen bg-gray-100 p-4">
@@ -419,41 +572,97 @@ export default function VendorPayPickerPage() {
                     className="mb-6 px-4 py-2 bg-white text-gray-700 rounded-lg hover:bg-gray-50 flex items-center gap-2 shadow-sm"
                 >
                     <ArrowLeft size={18} />
-                    Back to Vendor
+                    Back to Vendors
                 </button>
 
-                <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <div className="p-6 border-b bg-gradient-to-r from-purple-50 to-indigo-50">
-                        <h1 className="text-2xl font-bold text-gray-800 mb-2">Pay to Vendor</h1>
-                        <p className="text-gray-600">Scan Cheque or RTGS / Bank Statement to match payee with vendor, or enter vendor ID manually.</p>
+                <div className="bg-white rounded-xl shadow-md overflow-hidden">
+                    <div className="p-6 border-b bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50">
+                        <h1 className="text-2xl font-bold text-gray-800 mb-1">Pay to Vendor</h1>
+                        <p className="text-gray-600 text-sm">
+                            Scan a Cheque or RTGS statement to automatically match the payee and fill in payment details, or select a vendor manually.
+                        </p>
                     </div>
 
-                    <div className="p-6 space-y-5">
-                        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{error}</div>}
+                    <div className="p-6 space-y-6">
+                        {error && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm flex items-center gap-2">
+                                <AlertCircle size={18} className="shrink-0" />
+                                <span>{error}</span>
+                            </div>
+                        )}
 
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => setShowScanner(true)}
-                                className="px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 font-medium"
-                            >
-                                <ScanLine size={18} />
-                                Scan Cheque / RTGS & Match Vendor
-                            </button>
+                        {/* Extracted Cheque / Document Details Card */}
+                        {extractedCheckData && (
+                            <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-4 shadow-sm">
+                                <div className="flex items-center justify-between mb-3 border-b border-emerald-200 pb-2">
+                                    <div className="flex items-center gap-2 text-emerald-800 font-semibold text-sm">
+                                        <CheckCircle2 size={18} className="text-emerald-600" />
+                                        <span>Document Scanned Successfully ({extractedCheckData.document_type || "CHEQUE"})</span>
+                                    </div>
+                                    {extractedCheckData.amount > 0 && (
+                                        <span className="text-base font-bold text-emerald-900 bg-white px-3 py-0.5 rounded-full border border-emerald-300 shadow-xs">
+                                            ₹{Number(extractedCheckData.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                                    <div>
+                                        <span className="text-gray-500 block">Extracted Payee:</span>
+                                        <span className="font-semibold text-gray-800">{extractedCheckData.payee_name || extractedCheckData.pay_name || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 block">Cheque / Ref No:</span>
+                                        <span className="font-semibold text-gray-800">{extractedCheckData.cheque_number || extractedCheckData.rtgs_transaction_id || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 block">Bank Name:</span>
+                                        <span className="font-semibold text-gray-800">{extractedCheckData.cheque_bank || extractedCheckData.rtgs_bank || "N/A"}</span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 block">Date:</span>
+                                        <span className="font-semibold text-gray-800">{extractedCheckData.cheque_date || extractedCheckData.date || "N/A"}</span>
+                                    </div>
+                                    {extractedCheckData.notes && (
+                                        <div className="col-span-2">
+                                            <span className="text-gray-500 block">Notes / Particulars:</span>
+                                            <span className="text-gray-700 truncate block">{extractedCheckData.notes}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Scanner & Payee Match Search */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <button
+                                    onClick={() => setShowScanner(true)}
+                                    className="flex-1 px-4 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 flex items-center justify-center gap-2 font-medium shadow-sm transition-all"
+                                >
+                                    <ScanLine size={20} />
+                                    Scan Cheque / RTGS & Match
+                                </button>
+                            </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Payee / Vendor Name (from Cheque / RTGS)</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+                                    Payee / Vendor Name (from Cheque / RTGS)
+                                </label>
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
                                         value={payeeName}
                                         onChange={(e) => setPayeeName(e.target.value)}
-                                        placeholder="Enter or scan payee / vendor name"
-                                        className="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") handleSearchManual();
+                                        }}
+                                        placeholder="e.g. HM Enterprises, Trade Links, Pritam Auto..."
+                                        className="flex-1 px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-xs"
                                     />
                                     <button
                                         onClick={handleSearchManual}
                                         disabled={!payeeName.trim() || loadingMatch}
-                                        className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-black disabled:opacity-60 flex items-center gap-2"
+                                        className="px-5 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-black disabled:opacity-50 flex items-center gap-2 font-medium transition-colors shadow-xs"
                                     >
                                         {loadingMatch ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
                                         Match
@@ -462,64 +671,175 @@ export default function VendorPayPickerPage() {
                             </div>
                         </div>
 
-                        {matchedVendors.length > 0 && (
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Matched Vendors</label>
+                        {/* Matched Vendors Results */}
+                        {loadingMatch && (
+                            <div className="p-4 bg-indigo-50/50 rounded-xl border border-indigo-100 flex items-center justify-center gap-3 text-indigo-700 text-sm">
+                                <Loader2 className="animate-spin" size={18} />
+                                <span>Searching and scoring vendors for &ldquo;{payeeName}&rdquo;...</span>
+                            </div>
+                        )}
+
+                        {!loadingMatch && matchedVendors.length > 0 && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+                                        <CheckCircle2 size={16} className="text-indigo-600" />
+                                        Matched Vendors ({matchedVendors.length})
+                                    </label>
+                                    <span className="text-xs text-gray-500">Sorted by match confidence</span>
+                                </div>
                                 <div className="space-y-2">
-                                    {matchedVendors.map((vendor) => (
-                                        <label
-                                            key={vendor.id}
-                                            className={`block p-3 rounded-lg border cursor-pointer ${
-                                                selectedVendorId === String(vendor.id) ? "border-indigo-500 bg-indigo-50" : "border-gray-200"
-                                            }`}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="selectedVendor"
-                                                value={vendor.id}
-                                                checked={selectedVendorId === String(vendor.id)}
-                                                onChange={(e) => setSelectedVendorId(e.target.value)}
-                                                className="mr-2"
-                                            />
-                                            <span className="font-medium text-gray-800">{vendor.name}</span>
-                                            <span className="ml-2 text-xs text-gray-500">ID: {vendor.id}</span>
-                                            {vendor.gstin && <span className="ml-2 text-xs text-gray-500">GSTIN: {vendor.gstin}</span>}
-                                        </label>
-                                    ))}
+                                    {matchedVendors.map((vendor) => {
+                                        const isSelected = selectedVendorId === String(vendor.id);
+                                        return (
+                                            <label
+                                                key={vendor.id}
+                                                className={`flex items-center justify-between p-3.5 rounded-xl border cursor-pointer transition-all ${
+                                                    isSelected
+                                                        ? "border-indigo-600 bg-indigo-50/70 shadow-sm ring-1 ring-indigo-600"
+                                                        : "border-gray-200 hover:border-gray-300 bg-white"
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <input
+                                                        type="radio"
+                                                        name="selectedVendor"
+                                                        value={vendor.id}
+                                                        checked={isSelected}
+                                                        onChange={(e) => setSelectedVendorId(e.target.value)}
+                                                        className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                                                    />
+                                                    <div>
+                                                        <span className="font-bold text-gray-900 block">{vendor.name}</span>
+                                                        {vendor.gstin && (
+                                                            <span className="text-xs text-gray-500 font-mono">GSTIN: {vendor.gstin}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {vendor.score >= 80 ? (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                                            {vendor.score}% Match
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">
+                                                            {vendor.score}% Match
+                                                        </span>
+                                                    )}
+                                                    {isSelected && <Check size={18} className="text-indigo-600" />}
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
 
-                        <div className="pt-2 border-t">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Or enter Vendor ID manually</label>
-                            <input
-                                type="text"
-                                value={vendorIdInput}
-                                onChange={(e) => setVendorIdInput(e.target.value)}
-                                placeholder="Vendor ID"
-                                className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                            />
-                            <p className="text-xs text-gray-500 mt-1">Manual ID works if document match is not found.</p>
+                        {/* No match banner */}
+                        {!loadingMatch && hasSearched && matchedVendors.length === 0 && (
+                            <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-sm flex items-start gap-3">
+                                <AlertCircle size={20} className="text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="font-semibold">No direct match found for &ldquo;{payeeName}&rdquo;</p>
+                                    <p className="text-xs text-amber-800 mt-1">
+                                        Please select your vendor from the full list below, or verify the spelling.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Manual / Full Vendor Picker */}
+                        <div className="pt-4 border-t space-y-3">
+                            <div className="flex items-center justify-between">
+                                <label className="block text-sm font-semibold text-gray-800">
+                                    Or Select Vendor from Full List ({allVendors.length})
+                                </label>
+                                {selectedVendor && (
+                                    <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                                        Selected: {selectedVendor.name}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="relative">
+                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input
+                                    type="text"
+                                    value={vendorSearchFilter}
+                                    onChange={(e) => setVendorSearchFilter(e.target.value)}
+                                    placeholder="Search vendor by name or GSTIN..."
+                                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm shadow-xs"
+                                />
+                            </div>
+
+                            <div className="max-h-56 overflow-y-auto space-y-1.5 border rounded-xl p-2 bg-gray-50/50">
+                                {loadingVendors ? (
+                                    <div className="py-6 text-center text-gray-500 text-sm flex items-center justify-center gap-2">
+                                        <Loader2 className="animate-spin" size={16} />
+                                        Loading vendors...
+                                    </div>
+                                ) : filteredAllVendors.length === 0 ? (
+                                    <div className="py-4 text-center text-gray-500 text-xs">
+                                        No vendors found matching &ldquo;{vendorSearchFilter}&rdquo;
+                                    </div>
+                                ) : (
+                                    filteredAllVendors.map((vendor) => {
+                                        const isSelected = selectedVendorId === String(vendor.id);
+                                        return (
+                                            <div
+                                                key={vendor.id}
+                                                onClick={() => setSelectedVendorId(String(vendor.id))}
+                                                className={`p-2.5 rounded-lg cursor-pointer flex items-center justify-between transition-colors ${
+                                                    isSelected
+                                                        ? "bg-indigo-600 text-white font-semibold"
+                                                        : "bg-white hover:bg-gray-100 text-gray-800 border border-gray-100"
+                                                }`}
+                                            >
+                                                <div className="flex flex-col text-sm">
+                                                    <span>{vendor.name}</span>
+                                                    {vendor.gstin && (
+                                                        <span className={`text-xs ${isSelected ? "text-indigo-200" : "text-gray-400"}`}>
+                                                            GSTIN: {vendor.gstin}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {isSelected && <Check size={16} />}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
                         </div>
 
-                        <button
-                            onClick={handleContinue}
-                            disabled={!canContinue}
-                            className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-60 flex items-center justify-center gap-2 font-medium"
-                        >
-                            <CreditCard size={18} />
-                            Continue to Payment Page
-                        </button>
+                        {/* Continue Button */}
+                        <div className="pt-2">
+                            <button
+                                onClick={handleContinue}
+                                disabled={!selectedVendorId}
+                                className="w-full px-4 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 font-semibold shadow-md transition-all text-base"
+                            >
+                                <CreditCard size={18} />
+                                {selectedVendor ? `Continue to Pay ${selectedVendor.name}` : "Select a Vendor to Continue"}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="mt-4 bg-white rounded-lg shadow-sm p-3 text-xs text-gray-600 flex items-center gap-2">
-                    <Building2 size={14} />
-                    This opens the vendor payment page prefilled with extracted details.
+                <div className="mt-4 bg-white rounded-xl shadow-xs p-3 text-xs text-gray-600 flex items-center gap-2 border border-gray-200">
+                    <Building2 size={16} className="text-gray-400 shrink-0" />
+                    <span>Proceeding will open the vendor payment form with all scanned cheque fields automatically prefilled.</span>
                 </div>
             </div>
 
             {showScanner && <CheckScannerModal onExtracted={handleExtracted} onClose={() => setShowScanner(false)} />}
         </div>
+    );
+}
+
+export default function VendorPayPickerPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-indigo-600" size={32} /></div>}>
+            <VendorPayPickerContent />
+        </Suspense>
     );
 }
