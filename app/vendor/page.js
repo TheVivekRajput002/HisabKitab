@@ -1,10 +1,31 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, Building2, Plus, Edit2, Trash2, FileText, Calendar, DollarSign, AlertCircle, Loader2, ScanLine, CreditCard } from 'lucide-react';
+import {
+    Search,
+    Building2,
+    Plus,
+    Edit2,
+    Trash2,
+    FileText,
+    Calendar,
+    DollarSign,
+    AlertCircle,
+    Loader2,
+    ScanLine,
+    CreditCard,
+    Filter,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
+    ArrowDownAZ,
+    ArrowUpZA,
+    X
+} from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
 import { useCompany } from '@/hooks/useCompany';
+import { toast } from '@/components/ToastProvider';
 
 // ============================================================================
 // UI COMPONENTS
@@ -24,36 +45,8 @@ function Alert({ children, variant = 'info', className = '' }) {
 // VENDOR TABLE ROW COMPONENT
 // ============================================================================
 
-function VendorTableRow({ index, vendor, onEdit, onDelete, onViewBills, onViewPayments, onViewLedger }) {
-    const [billStats, setBillStats] = useState({ total: 0, unpaid: 0, totalAmount: 0 });
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        fetchBillStats();
-    }, [vendor.id]);
-
-    const fetchBillStats = async () => {
-        try {
-            const { data: bills, error } = await supabase
-                .from('vendor_bills')
-                .select('payment_status, total_amount')
-                .eq('vendor_id', vendor.id);
-
-            if (error) throw error;
-
-            const stats = {
-                total: bills?.length || 0,
-                unpaid: bills?.filter(b => b.payment_status === 'unpaid').length || 0,
-                totalAmount: bills?.reduce((sum, b) => sum + Number(b.total_amount || 0), 0) || 0
-            };
-
-            setBillStats(stats);
-        } catch (error) {
-            console.error('Error fetching bill stats:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
+function VendorTableRow({ index, vendor, stats, loading, onEdit, onDelete, onViewBills, onViewPayments, onViewLedger }) {
+    const billStats = stats || { total: 0, unpaid: 0, totalAmount: 0 };
 
     return (
         <tr className="hover:bg-blue-50/50 transition-colors">
@@ -103,7 +96,7 @@ function VendorTableRow({ index, vendor, onEdit, onDelete, onViewBills, onViewPa
                 )}
             </td>
             <td className="py-3.5 px-4 text-center text-xs text-gray-500">
-                {new Date(vendor.created_at).toLocaleDateString('en-GB')}
+                {vendor.created_at ? new Date(vendor.created_at).toLocaleDateString('en-GB') : '-'}
             </td>
             <td className="py-3.5 px-4 text-center">
                 <div className="flex items-center justify-center gap-1.5">
@@ -198,6 +191,7 @@ function VendorFormModal({ vendor, onClose, onSave, companyId }) {
                 if (insertError) throw insertError;
             }
 
+            toast.success(vendor ? 'Vendor updated successfully' : 'Vendor created successfully');
             onSave();
         } catch (err) {
             setError(err.message);
@@ -284,12 +278,16 @@ function VendorFormModal({ vendor, onClose, onSave, companyId }) {
 // MAIN VENDOR PAGE
 // ============================================================================
 
+const ALPHABETS = ['ALL', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''), '#'];
+
 export default function VendorPage() {
     const router = useRouter();
     const { companyId } = useCompany();
     const [vendors, setVendors] = useState([]);
-    const [filteredVendors, setFilteredVendors] = useState([]);
+    const [vendorStats, setVendorStats] = useState({});
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedLetter, setSelectedLetter] = useState('ALL');
+    const [sortBy, setSortBy] = useState('name-asc');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showForm, setShowForm] = useState(false);
@@ -299,10 +297,6 @@ export default function VendorPage() {
         if (companyId) fetchVendors();
     }, [companyId]);
 
-    useEffect(() => {
-        filterVendors();
-    }, [searchQuery, vendors]);
-
     const fetchVendors = async () => {
         try {
             setLoading(true);
@@ -310,12 +304,38 @@ export default function VendorPage() {
                 .from('vendors')
                 .select('*')
                 .eq('company_id', companyId)
-                .order('created_at', { ascending: false });
+                .order('name', { ascending: true });
 
             if (fetchError) throw fetchError;
 
-            setVendors(data || []);
-            setFilteredVendors(data || []);
+            const vendorList = data || [];
+            setVendors(vendorList);
+
+            // Fetch bill stats in bulk for sorting & summary
+            if (vendorList.length > 0) {
+                const vendorIds = vendorList.map(v => v.id);
+                const { data: bills, error: billsErr } = await supabase
+                    .from('vendor_bills')
+                    .select('vendor_id, payment_status, total_amount')
+                    .in('vendor_id', vendorIds);
+
+                if (!billsErr && bills) {
+                    const stats = {};
+                    bills.forEach(b => {
+                        if (!stats[b.vendor_id]) {
+                            stats[b.vendor_id] = { total: 0, unpaid: 0, totalAmount: 0 };
+                        }
+                        stats[b.vendor_id].total += 1;
+                        if (b.payment_status === 'unpaid') {
+                            stats[b.vendor_id].unpaid += 1;
+                        }
+                        stats[b.vendor_id].totalAmount += Number(b.total_amount || 0);
+                    });
+                    setVendorStats(stats);
+                }
+            } else {
+                setVendorStats({});
+            }
         } catch (err) {
             setError(err.message);
         } finally {
@@ -323,20 +343,99 @@ export default function VendorPage() {
         }
     };
 
-    const filterVendors = () => {
-        if (!searchQuery.trim()) {
-            setFilteredVendors(vendors);
-            return;
+    // Calculate letter distribution counts for quick navigation
+    const letterCounts = useMemo(() => {
+        const counts = {};
+        vendors.forEach(v => {
+            const firstChar = (v.name || '').trim().charAt(0).toUpperCase();
+            if (/^[A-Z]$/.test(firstChar)) {
+                counts[firstChar] = (counts[firstChar] || 0) + 1;
+            } else if (firstChar) {
+                counts['#'] = (counts['#'] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [vendors]);
+
+    // Filter and sort vendors (alphabetical A to Z by default)
+    const filteredVendors = useMemo(() => {
+        let result = [...vendors];
+
+        // 1. Text search (Name or GSTIN)
+        if (searchQuery.trim()) {
+            const query = searchQuery.trim().toLowerCase();
+            result = result.filter(v =>
+                (v.name && v.name.toLowerCase().includes(query)) ||
+                (v.gstin && v.gstin.toLowerCase().includes(query))
+            );
         }
 
-        const query = searchQuery.toLowerCase();
-        const filtered = vendors.filter(
-            (v) =>
-                v.name.toLowerCase().includes(query) ||
-                (v.gstin && v.gstin.toLowerCase().includes(query))
-        );
-        setFilteredVendors(filtered);
+        // 2. Alphabet filter
+        if (selectedLetter !== 'ALL') {
+            if (selectedLetter === '#') {
+                result = result.filter(v => {
+                    const firstChar = (v.name || '').trim().charAt(0).toUpperCase();
+                    return firstChar && !/^[A-Z]$/.test(firstChar);
+                });
+            } else {
+                result = result.filter(v =>
+                    (v.name || '').trim().toUpperCase().startsWith(selectedLetter)
+                );
+            }
+        }
+
+        // 3. Sorting (A to Z by default)
+        result.sort((a, b) => {
+            switch (sortBy) {
+                case 'name-desc':
+                    return (b.name || '').localeCompare(a.name || '', undefined, { sensitivity: 'base' });
+                case 'date-desc':
+                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+                case 'date-asc':
+                    return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+                case 'bills-desc':
+                    return (vendorStats[b.id]?.total || 0) - (vendorStats[a.id]?.total || 0);
+                case 'bills-asc':
+                    return (vendorStats[a.id]?.total || 0) - (vendorStats[b.id]?.total || 0);
+                case 'unpaid-desc':
+                    return (vendorStats[b.id]?.unpaid || 0) - (vendorStats[a.id]?.unpaid || 0);
+                case 'unpaid-asc':
+                    return (vendorStats[a.id]?.unpaid || 0) - (vendorStats[b.id]?.unpaid || 0);
+                case 'amount-desc':
+                    return (vendorStats[b.id]?.totalAmount || 0) - (vendorStats[a.id]?.totalAmount || 0);
+                case 'amount-asc':
+                    return (vendorStats[a.id]?.totalAmount || 0) - (vendorStats[b.id]?.totalAmount || 0);
+                case 'name-asc':
+                default:
+                    return (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+            }
+        });
+
+        return result;
+    }, [vendors, vendorStats, searchQuery, selectedLetter, sortBy]);
+
+    // Column header sort toggle handler
+    const handleSort = (field) => {
+        if (field === 'name') {
+            setSortBy(prev => prev === 'name-asc' ? 'name-desc' : 'name-asc');
+        } else if (field === 'date') {
+            setSortBy(prev => prev === 'date-desc' ? 'date-asc' : 'date-desc');
+        } else if (field === 'bills') {
+            setSortBy(prev => prev === 'bills-desc' ? 'bills-asc' : 'bills-desc');
+        } else if (field === 'unpaid') {
+            setSortBy(prev => prev === 'unpaid-desc' ? 'unpaid-asc' : 'unpaid-desc');
+        } else if (field === 'amount') {
+            setSortBy(prev => prev === 'amount-desc' ? 'amount-asc' : 'amount-desc');
+        }
     };
+
+    const clearAllFilters = () => {
+        setSearchQuery('');
+        setSelectedLetter('ALL');
+        setSortBy('name-asc');
+    };
+
+    const hasActiveFilters = searchQuery.trim() !== '' || selectedLetter !== 'ALL' || sortBy !== 'name-asc';
 
     const handleEdit = (vendor) => {
         setEditingVendor(vendor);
@@ -357,8 +456,9 @@ export default function VendorPage() {
             if (deleteError) throw deleteError;
 
             await fetchVendors();
+            toast.success('Vendor deleted successfully');
         } catch (err) {
-            alert(`Error deleting vendor: ${err.message}`);
+            toast.error(`Error deleting vendor: ${err.message}`);
         }
     };
 
@@ -390,7 +490,7 @@ export default function VendorPage() {
                 {/* Header */}
                 <div className="mb-6">
                     <h1 className="text-3xl font-bold text-gray-800 mb-2">Vendor Management</h1>
-                    <p className="text-gray-600">Manage your vendors and track their bills</p>
+                    <p className="text-gray-600">Manage your vendors, sort alphabetically, and track their bills</p>
                 </div>
 
                 {/* Error Alert */}
@@ -401,8 +501,8 @@ export default function VendorPage() {
                     </Alert>
                 )}
 
-                {/* Search and Add */}
-                <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+                {/* Search & Actions Bar */}
+                <div className="bg-white rounded-lg shadow-md p-4 mb-4">
                     <div className="flex flex-col md:flex-row gap-4">
                         <div className="flex-1 relative">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
@@ -411,8 +511,17 @@ export default function VendorPage() {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 placeholder="Search vendors by name or GSTIN..."
-                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full pl-10 pr-10 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
+                            {searchQuery && (
+                                <button
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    title="Clear search"
+                                >
+                                    <X size={18} />
+                                </button>
+                            )}
                         </div>
                         <button
                             onClick={() => router.push('/vendor/scanner')}
@@ -436,6 +545,120 @@ export default function VendorPage() {
                             Add Vendor
                         </button>
                     </div>
+                </div>
+
+                {/* Alphabetical Filter Strip (A-Z) */}
+                <div className="bg-white rounded-lg shadow-md p-3 mb-6 border border-gray-200">
+                    <div className="flex items-center justify-between gap-2 mb-2 px-1">
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-gray-600">
+                            <ArrowDownAZ size={16} className="text-blue-600" />
+                            <span>Alphabetical Filter:</span>
+                        </div>
+                        {selectedLetter !== 'ALL' && (
+                            <button
+                                onClick={() => {
+                                    setSelectedLetter('ALL');
+                                    setSortBy('name-asc');
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 cursor-pointer"
+                            >
+                                <span>Reset to All (A → Z)</span>
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-1 items-center">
+                        {ALPHABETS.map((letter) => {
+                            const count = letter === 'ALL' ? vendors.length : (letterCounts[letter] || 0);
+                            const isSelected = selectedLetter === letter;
+                            const hasVendors = count > 0;
+
+                            return (
+                                <button
+                                    key={letter}
+                                    onClick={() => {
+                                        setSelectedLetter(letter);
+                                        setSortBy('name-asc');
+                                    }}
+                                    disabled={letter !== 'ALL' && !hasVendors}
+                                    className={`px-2.5 py-1 text-xs rounded-md transition-all font-medium flex items-center gap-1 cursor-pointer ${
+                                        isSelected
+                                            ? 'bg-blue-600 text-white font-bold shadow-sm'
+                                            : hasVendors
+                                            ? 'bg-gray-100 text-gray-800 hover:bg-blue-50 hover:text-blue-600 border border-gray-200'
+                                            : 'bg-gray-50 text-gray-300 border border-transparent cursor-not-allowed opacity-40'
+                                    }`}
+                                    title={letter === 'ALL' ? `All Vendors (A → Z by default) (${vendors.length})` : `${letter}: ${count} vendor(s)`}
+                                >
+                                    <span>{letter === 'ALL' ? 'ALL (A → Z)' : letter}</span>
+                                    {hasVendors && letter !== 'ALL' && (
+                                        <span className={`text-[10px] px-1 py-0.2 rounded-full ${
+                                            isSelected ? 'bg-blue-700 text-white' : 'bg-gray-200 text-gray-700'
+                                        }`}>
+                                            {count}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* Active Filter Tags */}
+                    {hasActiveFilters && (
+                        <div className="flex flex-wrap gap-2 items-center pt-2.5 mt-2.5 border-t border-gray-100">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1">
+                                <Filter size={13} />
+                                Active Filters:
+                            </span>
+
+                            {searchQuery && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Search: "{searchQuery}"
+                                    <button onClick={() => setSearchQuery('')} className="hover:bg-blue-200 rounded-full p-0.5 cursor-pointer">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            )}
+
+                            {selectedLetter !== 'ALL' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                    Letter: {selectedLetter}
+                                    <button
+                                        onClick={() => {
+                                            setSelectedLetter('ALL');
+                                            setSortBy('name-asc');
+                                        }}
+                                        className="hover:bg-indigo-200 rounded-full p-0.5 cursor-pointer"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            )}
+
+                            {sortBy !== 'name-asc' && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                    Sort: {
+                                        sortBy === 'name-desc' ? 'Name (Z to A)' :
+                                        sortBy === 'date-desc' ? 'Newest Added' :
+                                        sortBy === 'date-asc' ? 'Oldest Added' :
+                                        sortBy === 'amount-desc' ? 'Total Amount (High to Low)' :
+                                        sortBy === 'amount-asc' ? 'Total Amount (Low to High)' :
+                                        sortBy === 'unpaid-desc' ? 'Unpaid Bills (High to Low)' :
+                                        sortBy === 'bills-desc' ? 'Total Bills (High to Low)' : sortBy
+                                    }
+                                    <button onClick={() => setSortBy('name-asc')} className="hover:bg-amber-200 rounded-full p-0.5 cursor-pointer">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            )}
+
+                            <button
+                                onClick={clearAllFilters}
+                                className="text-xs text-red-600 hover:text-red-800 font-semibold underline ml-1 cursor-pointer"
+                            >
+                                Clear All
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Stats Summary */}
@@ -465,11 +688,15 @@ export default function VendorPage() {
                     <div className="bg-white rounded-lg shadow-md p-4">
                         <div className="flex items-center gap-3">
                             <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                                <Search className="text-purple-600" size={24} />
+                                <ArrowDownAZ className="text-purple-600" size={24} />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold text-gray-800">{searchQuery ? 'Active' : 'None'}</p>
-                                <p className="text-sm text-gray-600">Search Filter</p>
+                                <p className="text-2xl font-bold text-gray-800">
+                                    {selectedLetter === 'ALL' ? 'A → Z' : `Letter ${selectedLetter}`}
+                                </p>
+                                <p className="text-sm text-gray-600">
+                                    {selectedLetter === 'ALL' ? 'Alphabetical (Default)' : 'Letter Filter'}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -477,21 +704,29 @@ export default function VendorPage() {
 
                 {/* Vendors Table */}
                 {loading ? (
-                    <div className="flex items-center justify-center py-12">
+                    <div className="flex items-center justify-center py-12 bg-white rounded-lg shadow-md">
                         <Loader2 className="animate-spin text-blue-600" size={48} />
                     </div>
                 ) : filteredVendors.length === 0 ? (
                     <div className="bg-white rounded-lg shadow-md p-12 text-center">
                         <Building2 size={64} className="mx-auto mb-4 text-gray-300" />
                         <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                            {searchQuery ? 'No vendors found' : 'No vendors yet'}
+                            {hasActiveFilters ? 'No vendors match your filters' : 'No vendors yet'}
                         </h3>
                         <p className="text-gray-600 mb-4">
-                            {searchQuery
-                                ? 'Try adjusting your search query'
+                            {hasActiveFilters
+                                ? 'Try adjusting your search query, alphabet letter, or filter settings'
                                 : 'Get started by adding your first vendor'}
                         </p>
-                        {!searchQuery && (
+                        {hasActiveFilters ? (
+                            <button
+                                onClick={clearAllFilters}
+                                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 cursor-pointer"
+                            >
+                                <X size={18} />
+                                Clear All Filters
+                            </button>
+                        ) : (
                             <button
                                 onClick={() => setShowForm(true)}
                                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 inline-flex items-center gap-2 cursor-pointer"
@@ -506,13 +741,88 @@ export default function VendorPage() {
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse min-w-[850px]">
                                 <thead>
-                                    <tr className="bg-gray-800 text-white text-xs sm:text-sm font-semibold uppercase tracking-wider">
+                                    <tr className="bg-gray-800 text-white text-xs sm:text-sm font-semibold uppercase tracking-wider select-none">
                                         <th className="py-3.5 px-4 text-center w-12">#</th>
-                                        <th className="py-3.5 px-4">Vendor Details</th>
-                                        <th className="py-3.5 px-4 text-center">Total Bills</th>
-                                        <th className="py-3.5 px-4 text-center">Unpaid</th>
-                                        <th className="py-3.5 px-4 text-right">Total Amount</th>
-                                        <th className="py-3.5 px-4 text-center">Added Date</th>
+                                        <th
+                                            onClick={() => handleSort('name')}
+                                            className="py-3.5 px-4 cursor-pointer hover:bg-gray-700 transition-colors group"
+                                            title="Click to sort by Vendor Name (A-Z / Z-A)"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                <span>Vendor Details</span>
+                                                {sortBy === 'name-asc' ? (
+                                                    <ArrowUp size={14} className="text-blue-400" />
+                                                ) : sortBy === 'name-desc' ? (
+                                                    <ArrowDown size={14} className="text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="text-gray-400 opacity-60 group-hover:opacity-100" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th
+                                            onClick={() => handleSort('bills')}
+                                            className="py-3.5 px-4 text-center cursor-pointer hover:bg-gray-700 transition-colors group"
+                                            title="Click to sort by Total Bills"
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <span>Total Bills</span>
+                                                {sortBy === 'bills-desc' ? (
+                                                    <ArrowDown size={14} className="text-blue-400" />
+                                                ) : sortBy === 'bills-asc' ? (
+                                                    <ArrowUp size={14} className="text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="text-gray-400 opacity-60 group-hover:opacity-100" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th
+                                            onClick={() => handleSort('unpaid')}
+                                            className="py-3.5 px-4 text-center cursor-pointer hover:bg-gray-700 transition-colors group"
+                                            title="Click to sort by Unpaid Bills"
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <span>Unpaid</span>
+                                                {sortBy === 'unpaid-desc' ? (
+                                                    <ArrowDown size={14} className="text-blue-400" />
+                                                ) : sortBy === 'unpaid-asc' ? (
+                                                    <ArrowUp size={14} className="text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="text-gray-400 opacity-60 group-hover:opacity-100" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th
+                                            onClick={() => handleSort('amount')}
+                                            className="py-3.5 px-4 text-right cursor-pointer hover:bg-gray-700 transition-colors group"
+                                            title="Click to sort by Total Amount"
+                                        >
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                <span>Total Amount</span>
+                                                {sortBy === 'amount-desc' ? (
+                                                    <ArrowDown size={14} className="text-blue-400" />
+                                                ) : sortBy === 'amount-asc' ? (
+                                                    <ArrowUp size={14} className="text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="text-gray-400 opacity-60 group-hover:opacity-100" />
+                                                )}
+                                            </div>
+                                        </th>
+                                        <th
+                                            onClick={() => handleSort('date')}
+                                            className="py-3.5 px-4 text-center cursor-pointer hover:bg-gray-700 transition-colors group"
+                                            title="Click to sort by Added Date"
+                                        >
+                                            <div className="flex items-center justify-center gap-1.5">
+                                                <span>Added Date</span>
+                                                {sortBy === 'date-desc' ? (
+                                                    <ArrowDown size={14} className="text-blue-400" />
+                                                ) : sortBy === 'date-asc' ? (
+                                                    <ArrowUp size={14} className="text-blue-400" />
+                                                ) : (
+                                                    <ArrowUpDown size={14} className="text-gray-400 opacity-60 group-hover:opacity-100" />
+                                                )}
+                                            </div>
+                                        </th>
                                         <th className="py-3.5 px-4 text-center">Actions</th>
                                     </tr>
                                 </thead>
@@ -522,6 +832,8 @@ export default function VendorPage() {
                                             key={vendor.id}
                                             index={index}
                                             vendor={vendor}
+                                            stats={vendorStats[vendor.id]}
+                                            loading={loading}
                                             onEdit={handleEdit}
                                             onDelete={handleDelete}
                                             onViewBills={handleViewBills}

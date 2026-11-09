@@ -7,6 +7,7 @@ import { Camera, Upload, X, Check, AlertCircle, Trash2, Edit2, Save, ChevronDown
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/utils/supabaseClient';
 import { useCompany } from '@/hooks/useCompany';
+import { toast } from '@/components/ToastProvider';
 import QRCode from 'qrcode';
 import { jsPDF } from 'jspdf';
 
@@ -199,7 +200,11 @@ const imageUtils = {
             return;
           }
           const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
-          console.log(`Image compressed from ${(file.size / 1024 / 1024).toFixed(2)}MB to ${(blob.size / 1024 / 1024).toFixed(2)}MB (${((blob.size / file.size) * 100).toFixed(1)}%)`);
+          const origMb = (file.size / 1024 / 1024).toFixed(2);
+          const newMb = (blob.size / 1024 / 1024).toFixed(2);
+          const ratio = ((blob.size / file.size) * 100).toFixed(1);
+          console.log(`Image compressed from ${origMb}MB to ${newMb}MB (${ratio}%)`);
+          toast.info(`Image optimized: ${origMb}MB → ${newMb}MB (${ratio}% of original)`, { title: 'Image Optimizer' });
           resolve(compressedFile);
         }, 'image/jpeg', quality); // Lower quality for faster scanning and wider compatibility
       };
@@ -405,8 +410,10 @@ const geminiService = {
     const { rawText, model, usedModel, responseTimeMs } = await response.json();
 
     const activeModel = model || usedModel || 'Unknown Model';
+    const scanTimeSec = (clientResponseTimeMs / 1000).toFixed(1);
     console.log(`[Scan Invoice] Model used: ${activeModel}`);
-    console.log(`[Scan Invoice] Response time: ${clientResponseTimeMs}ms (${(clientResponseTimeMs / 1000).toFixed(2)}s)${responseTimeMs ? ` [Server: ${responseTimeMs}ms]` : ''}`);
+    console.log(`[Scan Invoice] Response time: ${clientResponseTimeMs}ms (${scanTimeSec}s)${responseTimeMs ? ` [Server: ${responseTimeMs}ms]` : ''}`);
+    toast.info(`Scanned in ${scanTimeSec}s (${activeModel})`, { title: 'AI OCR Complete' });
 
     if (!rawText) throw new Error('No response from AI');
     // Helper to extract and clean JSON
@@ -485,6 +492,9 @@ const geminiService = {
 
     console.log('[Scan Invoice] 📥 Extracted Data (Raw AI Output):', jsonData);
     console.log('[Scan Invoice] 🏗️ Structured Data (Formatted App Model):', structuredData);
+    const count = products.length;
+    const vendorLabel = vendorData?.name ? ` from ${vendorData.name}` : '';
+    toast.success(`Extracted ${count} product${count === 1 ? '' : 's'}${vendorLabel}`, { title: 'Invoice Processed' });
 
     // Return both products and metadata
     return structuredData;
@@ -1392,6 +1402,7 @@ export default function InvoiceScanner() {
 
       if (extractedData.products.length === 0) {
         setError('No products found. Try a clearer image.');
+        toast.warning('No products found on invoice. Try a clearer image.', { title: 'Scan Notice' });
       } else {
         const enrichedProducts = await productService.checkDuplicates(extractedData.products, companyId);
         setProducts(enrichedProducts);
@@ -1401,15 +1412,16 @@ export default function InvoiceScanner() {
     } catch (err) {
       console.error('Scan error:', err);
 
+      let msg = `Error: ${err.message}`;
       if (err.message.includes('API key')) {
-        setError('⚠️ API key invalid. Check server configuration.');
+        msg = '⚠️ API key invalid. Check server configuration.';
       } else if (err.message.includes('Network')) {
-        setError('🌐 Network error. Check your connection.');
+        msg = '🌐 Network error. Check your connection.';
       } else if (err.message.includes('parse')) {
-        setError('📄 Failed to read invoice. Try a clearer image.');
-      } else {
-        setError(`❌ Error: ${err.message}`);
+        msg = '📄 Failed to read invoice. Try a clearer image.';
       }
+      setError(msg);
+      toast.error(msg, { title: 'Scan Error' });
     } finally {
       scanProgressBar.complete();
       setTimeout(() => setIsProcessing(false), 600);
@@ -1430,7 +1442,7 @@ export default function InvoiceScanner() {
       // Check for errors first
       if (results.errors.length > 0) {
         const errorMessage = results.errors.map(e => `❌ ${e.name}: ${e.error}`).join('\n');
-        alert(errorMessage);
+        toast.error(errorMessage, { title: 'Transaction Error' });
         setIsProcessing(false);
         return;
       }
@@ -1469,7 +1481,7 @@ export default function InvoiceScanner() {
         });
       }
 
-      alert(message || 'Operation completed!');
+      toast.success(message || 'Operation completed!', { title: 'Purchase Saved', duration: 6000 });
       setProducts([]);
       setVendorData(null);
       setInvoiceData(null);
@@ -1478,6 +1490,7 @@ export default function InvoiceScanner() {
       setShowConfirmation(false);
     } catch (err) {
       setError(err.message || 'Failed to add products');
+      toast.error(err.message || 'Failed to add products');
     } finally {
       setIsProcessing(false);
     }
@@ -1485,16 +1498,16 @@ export default function InvoiceScanner() {
 
   const handleGenerateQRCodes = async () => {
     if (products.length === 0) {
-      alert('No products to generate QR codes for');
+      toast.warning('No products to generate QR codes for');
       return;
     }
 
     setIsProcessing(true);
     try {
       const result = await qrCodeService.generateQRCodesPDF(products, vendorData?.name);
-      alert(`✅ QR Codes PDF generated successfully!\nFile: ${result.fileName}`);
+      toast.success(`QR Codes PDF generated successfully!\nFile: ${result.fileName}`, { title: 'QR Codes' });
     } catch (error) {
-      alert(`❌ Failed to generate QR codes: ${error.message}`);
+      toast.error(`Failed to generate QR codes: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }

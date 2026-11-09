@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp";
 import CompanyProvider from "@/components/CompanyProvider";
+import ToastProvider from "@/components/ToastProvider";
 
 export default function RootLayout({ children }) {
   return (
@@ -12,11 +13,13 @@ export default function RootLayout({ children }) {
       <body suppressHydrationWarning>
         <ClerkProvider>
           <CompanyProvider>
-            <Header />
-            <main className="md:ml-16 pb-16 md:pb-0">
-              {children}
-            </main>
-            <KeyboardShortcutsHelp />
+            <ToastProvider>
+              <Header />
+              <main className="md:ml-16 pb-16 md:pb-0">
+                {children}
+              </main>
+              <KeyboardShortcutsHelp />
+            </ToastProvider>
           </CompanyProvider>
         </ClerkProvider>
         <Script

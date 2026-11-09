@@ -22,6 +22,7 @@ import { uploadInvoicePDF } from '@/utils/uploadInvoicePDF';
 import InvoicePDF from './InvoicePDF';
 
 import { ToastContainer } from './Toast';
+import { toast } from '@/components/ToastProvider';
 
 // photos 
 import { uploadPhoto } from '@/utils/uploadPhoto';
@@ -116,18 +117,12 @@ const InvoiceEstimateAdd = () => {
 
   // In InvoiceGenerator component, update the addToast function:
   const addToast = (productDetails) => {
-    console.log('📢 addToast called with:', productDetails);
+    toast.success(`Product auto-saved: ${productDetails?.name || 'Item'}`, { title: 'Product Saved' });
     const newToast = {
       id: Date.now(),
       productDetails: productDetails
     };
-    console.log('📦 Creating toast:', newToast);
-    setToasts(prev => {
-      console.log('Previous toasts:', prev);
-      const updated = [...prev, newToast];
-      console.log('Updated toasts:', updated);
-      return updated;
-    });
+    setToasts(prev => [...prev, newToast]);
   };
 
   // In InvoiceGenerator, add this useEffect after the addToast function:
