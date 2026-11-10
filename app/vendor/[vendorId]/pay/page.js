@@ -367,7 +367,7 @@ function ImageCropper({ imageSrc, onCropComplete, onCancel }) {
 // CHECK SCANNER MODAL
 // ============================================================================
 
-function CheckScannerModal({ onExtracted, onClose }) {
+function CheckScannerModal({ vendor, onExtracted, onClose }) {
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [scanning, setScanning] = useState(false);
@@ -431,38 +431,42 @@ function CheckScannerModal({ onExtracted, onClose }) {
                 reader.readAsDataURL(imageFile);
             });
 
-            // Call API
+            // Call API with vendor info for match verification
             const response = await fetch('/api/scan-check', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ imageBase64: base64 })
+                body: JSON.stringify({
+                    imageBase64: base64,
+                    vendors: vendor ? [{ id: vendor.id, name: vendor.name, gstin: vendor.gstin }] : undefined
+                })
             });
 
             if (!response.ok) {
                 const { error: apiError } = await response.json();
-                throw new Error(apiError || 'Failed to scan check');
+                throw new Error(apiError || 'Failed to scan document');
             }
 
-            const { rawText } = await response.json();
-            if (!rawText) throw new Error('No response from AI');
+            const resJson = await response.json();
+            let data = resJson.data;
 
-            // Parse JSON from response
-            const start = rawText.indexOf('{');
-            const end = rawText.lastIndexOf('}');
-            if (start === -1 || end === -1 || end <= start) {
-                throw new Error('Could not parse AI response');
+            if (!data && resJson.rawText) {
+                const start = resJson.rawText.indexOf('{');
+                const end = resJson.rawText.lastIndexOf('}');
+                if (start !== -1 && end !== -1 && end > start) {
+                    let jsonStr = resJson.rawText.substring(start, end + 1);
+                    jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+                    jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+                    data = JSON.parse(jsonStr);
+                }
             }
 
-            let jsonStr = rawText.substring(start, end + 1);
-            jsonStr = jsonStr.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-            jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
+            if (!data) throw new Error('Could not parse AI response');
 
-            const data = JSON.parse(jsonStr);
             onExtracted(data, imageFile);
             onClose();
         } catch (err) {
-            console.error('Check scan error:', err);
-            setError(err.message || 'Failed to scan check. Please try again.');
+            console.error('Document scan error:', err);
+            setError(err.message || 'Failed to scan document. Please try again.');
         } finally {
             setScanning(false);
         }
@@ -481,7 +485,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                 <div className="p-4 border-b bg-gradient-to-r from-blue-50 to-indigo-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <ScanLine className="text-blue-600" size={22} />
-                        <h2 className="text-lg font-bold text-gray-800">Scan Cheque / RTGS</h2>
+                        <h2 className="text-lg font-bold text-gray-800">Scan Cheque / RTGS / Receipt</h2>
                     </div>
                     <button
                         onClick={onClose}
@@ -506,7 +510,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50/30 transition-all">
                                 <Upload className="w-10 h-10 text-gray-400 mb-2" />
                                 <p className="text-sm text-gray-500">
-                                    <span className="font-semibold text-blue-600">Click to upload</span> a Cheque or RTGS image
+                                    <span className="font-semibold text-blue-600">Click to upload</span> a Cheque, RTGS, or Receipt image
                                 </p>
                                 <p className="text-xs text-gray-400 mt-1">PNG, JPG, WEBP (MAX. 5MB)</p>
                                 <input
@@ -526,7 +530,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                                 disabled={scanning}
                             >
                                 <Camera size={20} />
-                                Take Photo of Cheque / RTGS
+                                Take Photo of Cheque / RTGS / Receipt
                             </button>
                             <input
                                 ref={cameraInputRef}
@@ -539,7 +543,7 @@ function CheckScannerModal({ onExtracted, onClose }) {
                             />
 
                             <p className="text-xs text-gray-400 text-center">
-                                Upload or photograph the cheque or RTGS / bank transfer statement. AI will extract details automatically.
+                                Upload or photograph a Cheque, RTGS statement, or vendor Receipt. AI will extract details automatically.
                             </p>
                         </div>
                     ) : (
@@ -753,10 +757,11 @@ export default function VendorPayPage() {
         }
     };
 
-    // Handle extracted check or RTGS data from the scanner modal
+    // Handle extracted check, RTGS, or receipt data from the scanner modal
     const handleCheckExtracted = (data, imageFile) => {
+        const isReceipt = data?.document_type === 'RECEIPT' || Boolean(data?.receipt_number);
         const isRtgs = data?.document_type === 'RTGS' || Boolean(data?.rtgs_transaction_id);
-        const method = isRtgs ? 'RTGS' : 'CHEQUE';
+        const method = isReceipt ? 'RECEIPT' : isRtgs ? 'RTGS' : 'CHEQUE';
         setFormData(prev => ({
             ...prev,
             payment_method: method,
@@ -773,10 +778,14 @@ export default function VendorPayPage() {
             rtgs_bank: data.rtgs_bank || data.cheque_bank || data.ifsc_code || prev.rtgs_bank,
             rtgs_transfer_date: data.rtgs_transfer_date || data.date || data.cheque_date || prev.rtgs_transfer_date,
 
+            // RECEIPT fields
+            receipt_number: data.receipt_number || prev.receipt_number,
+            receipt_issued_by: data.receipt_issued_by || data.pay_name || data.payee_name || vendor?.name || prev.receipt_issued_by,
+
             payment_date: data.date || data.cheque_date || data.rtgs_transfer_date || prev.payment_date,
             notes: data.notes || prev.notes
         }));
-        // Store the cheque/payment image file for upload on submit
+        // Store the cheque/receipt image file for upload on submit
         if (imageFile) setChequeImageFile(imageFile);
         setScanFilled(true);
         setTimeout(() => setScanFilled(false), 5000);
@@ -799,7 +808,8 @@ export default function VendorPayPage() {
                             byteNumbers[i] = byteCharacters.charCodeAt(i);
                         }
                         const byteArray = new Uint8Array(byteNumbers);
-                        imgFile = new File([byteArray], 'scanned-cheque.jpg', { type: 'image/jpeg' });
+                        const fileName = payload.data?.document_type === 'RECEIPT' ? 'scanned-receipt.jpg' : 'scanned-cheque.jpg';
+                        imgFile = new File([byteArray], fileName, { type: 'image/jpeg' });
                     } catch (e) {
                         console.error('Error restoring image from prefill:', e);
                     }
@@ -911,27 +921,28 @@ export default function VendorPayPage() {
                 if (updateError) throw updateError;
             }
 
-            // 4. Upload cheque image if available
-            if (chequeImageFile && formData.payment_method === 'CHEQUE') {
+            // 4. Upload cheque / receipt image if available
+            if (chequeImageFile && (formData.payment_method === 'CHEQUE' || formData.payment_method === 'RECEIPT')) {
                 try {
-                    const fileExt = chequeImageFile.name.split('.').pop();
-                    const fileName = `cheque_${vendorId}_${paymentId}_${Date.now()}.${fileExt}`;
+                    const fileExt = chequeImageFile.name.split('.').pop() || 'jpg';
+                    const prefix = formData.payment_method === 'RECEIPT' ? 'receipt' : 'cheque';
+                    const fileName = `${prefix}_${vendorId}_${paymentId}_${Date.now()}.${fileExt}`;
 
                     const { error: uploadError } = await supabase.storage
                         .from('cheque-photos')
                         .upload(fileName, chequeImageFile);
 
                     if (uploadError) {
-                        console.error('Cheque image upload error:', uploadError);
+                        console.error('Document image upload error:', uploadError);
                     } else {
-                        // Update payment_details with the cheque photo URL
+                        // Update payment_details with the photo URL
                         await supabase
                             .from('payment_details')
                             .update({ cheque_photo_url: fileName })
                             .eq('payment_id', paymentId);
                     }
                 } catch (uploadErr) {
-                    console.error('Cheque image upload failed:', uploadErr);
+                    console.error('Document image upload failed:', uploadErr);
                     // Don't fail the payment if upload fails
                 }
             }
@@ -995,14 +1006,14 @@ export default function VendorPayPage() {
                                 </p>
                             </div>
 
-                            {/* Scan Check / RTGS Button — for CHEQUE or RTGS method */}
-                            {(formData.payment_method === 'CHEQUE' || formData.payment_method === 'RTGS') && (
+                            {/* Scan Cheque / RTGS / Receipt Button */}
+                            {(formData.payment_method === 'CHEQUE' || formData.payment_method === 'RTGS' || formData.payment_method === 'RECEIPT') && (
                                 <button
                                     onClick={() => setShowScanner(true)}
-                                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg hover:from-indigo-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg text-sm font-medium"
+                                    className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-lg hover:from-indigo-700 hover:from-indigo-700 transition-all shadow-md hover:shadow-lg text-sm font-medium"
                                 >
                                     <ScanLine size={18} />
-                                    Scan Cheque / RTGS
+                                    Scan Cheque / RTGS / Receipt
                                 </button>
                             )}
                         </div>
@@ -1257,9 +1268,10 @@ export default function VendorPayPage() {
                 </div>
             </div>
 
-            {/* Check Scanner Modal */}
+            {/* Check / RTGS / Receipt Scanner Modal */}
             {showScanner && (
                 <CheckScannerModal
+                    vendor={vendor}
                     onExtracted={handleCheckExtracted}
                     onClose={() => setShowScanner(false)}
                 />

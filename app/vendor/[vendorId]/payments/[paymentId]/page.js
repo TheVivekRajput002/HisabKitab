@@ -296,6 +296,22 @@ export default function VendorPaymentDetailsPage() {
                                                 <span className="text-gray-500 text-xs uppercase tracking-wider mb-1">Issued By</span>
                                                 <span className="font-medium text-gray-800">{payment.details.receipt_issued_by || 'N/A'}</span>
                                             </div>
+                                            {payment.details.cheque_photo_url && (
+                                                <div className="pt-3 mt-2 border-t border-gray-200">
+                                                    <button
+                                                        onClick={() => {
+                                                            const { data } = supabase.storage
+                                                                .from('cheque-photos')
+                                                                .getPublicUrl(payment.details.cheque_photo_url);
+                                                            window.open(data.publicUrl, '_blank');
+                                                        }}
+                                                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium shadow-sm"
+                                                    >
+                                                        <Eye size={16} />
+                                                        View Receipt Image
+                                                    </button>
+                                                </div>
+                                            )}
                                         </>
                                     )}
 
