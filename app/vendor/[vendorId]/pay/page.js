@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine, Pen, Undo2, Trash2, Minus, Plus, Crop, RotateCcw, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard, Loader2, DollarSign, Building, FileText, CheckCircle2, Camera, Upload, X, ScanLine, Pen, Undo2, Trash2, Minus, Plus, Crop, RotateCcw, Check, AlertCircle, AlertTriangle } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/utils/supabaseClient';
+import { toast } from '@/components/ToastProvider';
 
 // Lazy load ReactCrop
 const ReactCrop = dynamic(() => import('react-image-crop'), {
@@ -35,18 +36,6 @@ function ImageMarker({ imageSrc, onDone, onCancel }) {
         { color: '#000000', label: 'Black' },
     ];
 
-    // Initialize canvas when image loads
-    const handleImageLoad = useCallback(() => {
-        const canvas = canvasRef.current;
-        const img = imgRef.current;
-        if (!canvas || !img) return;
-
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        setCanvasReady(true);
-        redrawAll([]);
-    }, []);
-
     // Redraw all strokes on the canvas
     const redrawAll = useCallback((allStrokes) => {
         const canvas = canvasRef.current;
@@ -68,6 +57,18 @@ function ImageMarker({ imageSrc, onDone, onCancel }) {
             ctx.stroke();
         });
     }, []);
+
+    // Initialize canvas when image loads
+    const handleImageLoad = useCallback(() => {
+        const canvas = canvasRef.current;
+        const img = imgRef.current;
+        if (!canvas || !img) return;
+
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        setCanvasReady(true);
+        redrawAll([]);
+    }, [redrawAll]);
 
     // Get coordinates relative to the canvas (accounting for display scaling)
     const getCoords = useCallback((e) => {
@@ -674,6 +675,45 @@ export default function VendorPayPage() {
     const [scanFilled, setScanFilled] = useState(false);
     const [chequeImageFile, setChequeImageFile] = useState(null);
     const [previouslyPaid, setPreviouslyPaid] = useState(0);
+    const [duplicateReceipts, setDuplicateReceipts] = useState(null);
+    const [checkingDuplicateReceipt, setCheckingDuplicateReceipt] = useState(false);
+    const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
+    // Duplicate check for receipts by receipt number
+    const checkDuplicateReceipt = async (receiptNo) => {
+        if (!receiptNo || !String(receiptNo).trim()) return null;
+        const cleanNo = String(receiptNo).trim();
+        try {
+            const { data, error: dupError } = await supabase
+                .from('payment_details')
+                .select(`
+                    id,
+                    receipt_number,
+                    receipt_issued_by,
+                    payment_id,
+                    payments (
+                        id,
+                        payment_number,
+                        amount,
+                        payment_date,
+                        customer_id,
+                        status,
+                        created_at
+                    )
+                `)
+                .ilike('receipt_number', cleanNo);
+
+            if (dupError) {
+                console.error('Error querying duplicate receipts:', dupError);
+                return null;
+            }
+
+            return data && data.length > 0 ? data : null;
+        } catch (e) {
+            console.error('Exception checking duplicate receipt:', e);
+            return null;
+        }
+    };
 
     const [formData, setFormData] = useState({
         payment_method: 'CHEQUE',
@@ -815,6 +855,10 @@ export default function VendorPayPage() {
                     }
                 }
                 handleCheckExtracted(payload.data, imgFile);
+                if (payload.duplicateReceipts && payload.duplicateReceipts.length > 0) {
+                    setDuplicateReceipts(payload.duplicateReceipts);
+                    setShowDuplicateModal(true);
+                }
             }
             sessionStorage.removeItem('vendor_pay_prefill');
         } catch {
@@ -822,12 +866,54 @@ export default function VendorPayPage() {
         }
     }, [vendorId]);
 
+    // Live debounce check for duplicate receipt number
+    useEffect(() => {
+        if (formData.payment_method !== 'RECEIPT' || !formData.receipt_number?.trim()) {
+            setDuplicateReceipts(null);
+            setCheckingDuplicateReceipt(false);
+            return;
+        }
+
+        const cleanNo = formData.receipt_number.trim();
+        const timer = setTimeout(async () => {
+            setCheckingDuplicateReceipt(true);
+            const dups = await checkDuplicateReceipt(cleanNo);
+            setDuplicateReceipts(dups);
+            if (dups && dups.length > 0) {
+                setShowDuplicateModal(true);
+                toast.error(`Receipt #${cleanNo} is already recorded! Payment is blocked.`, {
+                    title: 'Duplicate Receipt Blocked'
+                });
+            }
+            setCheckingDuplicateReceipt(false);
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [formData.receipt_number, formData.payment_method]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setSubmitting(true);
         setError(null);
 
         try {
+            // Hard block: verify no duplicate receipt number (payment will NOT be done)
+            if (formData.payment_method === 'RECEIPT') {
+                const cleanReceiptNo = String(formData.receipt_number || '').trim();
+                if (cleanReceiptNo) {
+                    const dups = await checkDuplicateReceipt(cleanReceiptNo);
+                    if (dups && dups.length > 0) {
+                        setDuplicateReceipts(dups);
+                        setShowDuplicateModal(true);
+                        toast.error(
+                            `Receipt #${cleanReceiptNo} already exists in the ledger! Payment will not be processed.`,
+                            { title: 'Payment Blocked - Duplicate Receipt', duration: 7000 }
+                        );
+                        setSubmitting(false);
+                        return; // HARD BLOCK
+                    }
+                }
+            }
             // Generate auto-payment number (PAY- + Timestamp + Random)
             const paymentNumber = `PAY-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 
@@ -1204,15 +1290,71 @@ export default function VendorPayPage() {
                                 )}
 
                                 {formData.payment_method === 'RECEIPT' && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Number</label>
-                                            <input type="text" value={formData.receipt_number} onChange={(e) => setFormData({ ...formData, receipt_number: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" required placeholder="REC-1002" />
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="block text-sm font-medium text-gray-700">Receipt Number</label>
+                                                    {checkingDuplicateReceipt && (
+                                                        <span className="text-xs text-blue-600 inline-flex items-center gap-1 font-medium">
+                                                            <Loader2 size={12} className="animate-spin" /> Checking duplicates...
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <input 
+                                                    type="text" 
+                                                    value={formData.receipt_number} 
+                                                    onChange={(e) => setFormData({ ...formData, receipt_number: e.target.value })} 
+                                                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 transition-all ${
+                                                        duplicateReceipts && duplicateReceipts.length > 0
+                                                            ? 'border-amber-400 bg-amber-50/40 text-amber-950 focus:ring-amber-500 ring-2 ring-amber-200'
+                                                            : 'focus:ring-blue-500'
+                                                    }`} 
+                                                    required 
+                                                    placeholder="REC-1002" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Issued By</label>
+                                                <input type="text" value={formData.receipt_issued_by} onChange={(e) => setFormData({ ...formData, receipt_issued_by: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" required placeholder="Cashier Name" />
+                                            </div>
                                         </div>
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Issued By</label>
-                                            <input type="text" value={formData.receipt_issued_by} onChange={(e) => setFormData({ ...formData, receipt_issued_by: e.target.value })} className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" required placeholder="Cashier Name" />
-                                        </div>
+
+                                        {/* Duplicate Warning Box (Red Theme) */}
+                                        {duplicateReceipts && duplicateReceipts.length > 0 && (
+                                            <div className="p-3.5 bg-red-50 border-2 border-red-500 rounded-xl text-red-950 text-xs space-y-2.5 shadow-sm">
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 font-bold text-red-700">
+                                                        <AlertCircle size={16} className="text-red-600 shrink-0" />
+                                                        <span>Duplicate Receipt Blocked: #{formData.receipt_number} already in ledger</span>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowDuplicateModal(true)}
+                                                        className="text-[11px] bg-red-600 hover:bg-red-700 text-white font-bold px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer"
+                                                    >
+                                                        View Popup
+                                                    </button>
+                                                </div>
+                                                <p className="text-red-800 leading-relaxed font-medium">
+                                                    This receipt number was already used in previous transactions. <strong>Payment cannot be recorded with this receipt.</strong>
+                                                </p>
+                                                <div className="space-y-1">
+                                                    {duplicateReceipts.map((dup) => (
+                                                        <div key={dup.id} className="bg-white p-2 rounded-lg border border-red-200 flex items-center justify-between">
+                                                            <div>
+                                                                <span className="font-bold text-gray-900">Payment {dup.payments?.payment_number || 'N/A'}</span>
+                                                                <span className="text-gray-500 ml-2">Date: {dup.payments?.payment_date || 'N/A'}</span>
+                                                                {dup.receipt_issued_by && <span className="text-gray-500 ml-2">• By: {dup.receipt_issued_by}</span>}
+                                                            </div>
+                                                            <span className="font-bold text-red-600">
+                                                                ₹{Number(dup.payments?.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
@@ -1247,10 +1389,19 @@ export default function VendorPayPage() {
                             <div className="pt-4 border-t border-gray-100">
                                 <button
                                     type="submit"
-                                    disabled={submitting}
-                                    className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium text-lg"
+                                    disabled={submitting || Boolean(formData.payment_method === 'RECEIPT' && duplicateReceipts?.length > 0)}
+                                    className={`w-full px-4 py-3 text-white rounded-lg focus:ring-4 transition-all flex items-center justify-center gap-2 font-bold text-lg ${
+                                        formData.payment_method === 'RECEIPT' && duplicateReceipts?.length > 0
+                                            ? 'bg-red-600 hover:bg-red-700 cursor-not-allowed shadow-md opacity-90'
+                                            : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-200 disabled:opacity-70 disabled:cursor-not-allowed'
+                                    }`}
                                 >
-                                    {submitting ? (
+                                    {formData.payment_method === 'RECEIPT' && duplicateReceipts?.length > 0 ? (
+                                        <>
+                                            <AlertCircle size={22} />
+                                            Payment Blocked: Duplicate Receipt #{formData.receipt_number}
+                                        </>
+                                    ) : submitting ? (
                                         <>
                                             <Loader2 className="animate-spin" size={20} />
                                             Processing...
@@ -1267,6 +1418,91 @@ export default function VendorPayPage() {
                     )}
                 </div>
             </div>
+
+            {/* Red Theme Duplicate Receipt Blocked Modal */}
+            {showDuplicateModal && duplicateReceipts && duplicateReceipts.length > 0 && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border-2 border-red-600 overflow-hidden transform transition-all animate-in zoom-in-95 duration-150">
+                        {/* Red Header */}
+                        <div className="bg-gradient-to-r from-red-600 to-rose-700 text-white p-5 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-white shrink-0">
+                                    <AlertTriangle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-black tracking-tight">Duplicate Receipt Blocked</h3>
+                                    <p className="text-xs text-red-100">Payment will not be recorded</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setShowDuplicateModal(false)}
+                                className="text-white/80 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-6 space-y-4 bg-red-50/40">
+                            <div className="bg-red-100 border border-red-300 rounded-xl p-3.5 text-xs text-red-950 flex items-start gap-2.5">
+                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="font-black text-red-900 text-sm">
+                                        Receipt #{formData.receipt_number} Already Recorded
+                                    </p>
+                                    <p className="leading-relaxed">
+                                        A payment with this exact receipt number has already been entered into the system. To avoid duplicate payments, recording this payment is prohibited.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <p className="text-xs font-bold uppercase tracking-wider text-red-800">
+                                    Existing Payment{duplicateReceipts.length > 1 ? 's' : ''} with Receipt #{formData.receipt_number}:
+                                </p>
+                                <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                                    {duplicateReceipts.map((dup) => (
+                                        <div key={dup.id} className="bg-white border border-red-200 rounded-xl p-3 text-xs flex items-center justify-between flex-wrap gap-2 shadow-xs">
+                                            <div>
+                                                <p className="font-bold text-gray-900 text-sm">
+                                                    Payment #{dup.payments?.payment_number || 'N/A'}
+                                                </p>
+                                                <p className="text-gray-500 font-mono text-[11px] mt-0.5">
+                                                    Date: {dup.payments?.payment_date || 'N/A'}
+                                                </p>
+                                                {dup.receipt_issued_by && (
+                                                    <p className="text-gray-600 text-[11px] mt-0.5">
+                                                        Cashier: <strong>{dup.receipt_issued_by}</strong>
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="text-base font-black text-red-600">
+                                                    ₹{Number(dup.payments?.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                </span>
+                                                <span className="block text-[10px] uppercase font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 text-center mt-1">
+                                                    {dup.payments?.status || 'RECORDED'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="pt-3 border-t border-red-200 flex items-center justify-between">
+                                <span className="text-xs text-red-700 font-semibold">Payment Blocked</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDuplicateModal(false)}
+                                    className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-md transition-all cursor-pointer"
+                                >
+                                    Dismiss Notification
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Check / RTGS / Receipt Scanner Modal */}
             {showScanner && (

@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Clock, Calendar, CheckCircle, Search, Edit2, AlertCircle, Loader2, CreditCard, Building, Building2, Ticket, DollarSign, FileText, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Clock, Calendar, CheckCircle, Search, Edit2, AlertCircle, Loader2, CreditCard, Building, Building2, Ticket, DollarSign, FileText, ChevronRight, Trash2, X } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { toast } from '@/components/ToastProvider';
 
 function Badge({ children, variant = 'default', className = '' }) {
     const variants = {
@@ -38,6 +39,8 @@ export default function VendorPaymentsPage() {
     const [payments, setPayments] = useState([]);
     const [error, setError] = useState(null);
     const [stats, setStats] = useState({ total: 0, amount: 0 });
+    const [paymentToDelete, setPaymentToDelete] = useState(null);
+    const [deletingPaymentId, setDeletingPaymentId] = useState(null);
 
     useEffect(() => {
         if (vendorId) {
@@ -106,6 +109,93 @@ export default function VendorPaymentsPage() {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDeletePayment = async (paymentId, paymentNumber) => {
+        if (!paymentId) return;
+        setDeletingPaymentId(paymentId);
+        try {
+            // 1. Fetch details to delete photo if exists
+            const { data: detailsData } = await supabase
+                .from('payment_details')
+                .select('id, cheque_photo_url')
+                .eq('payment_id', paymentId);
+
+            if (detailsData && detailsData.length > 0) {
+                for (const d of detailsData) {
+                    if (d.cheque_photo_url) {
+                        try {
+                            await supabase.storage
+                                .from('cheque-photos')
+                                .remove([d.cheque_photo_url]);
+                        } catch (storageErr) {
+                            console.warn('Could not remove photo from storage:', storageErr);
+                        }
+                    }
+                }
+            }
+
+            // 2. Fetch payment row to check linked vendor_bill_id
+            const { data: paymentRow } = await supabase
+                .from('payments')
+                .select('vendor_bill_id')
+                .eq('id', paymentId)
+                .single();
+
+            // 3. Delete from payment_details first
+            const { error: detailsErr } = await supabase
+                .from('payment_details')
+                .delete()
+                .eq('payment_id', paymentId);
+
+            if (detailsErr) throw detailsErr;
+
+            // 4. Delete payment from payments table
+            const { error: payErr } = await supabase
+                .from('payments')
+                .delete()
+                .eq('id', paymentId);
+
+            if (payErr) throw payErr;
+
+            // 5. Update bill status if settled
+            if (paymentRow?.vendor_bill_id) {
+                const { data: remainingPayments } = await supabase
+                    .from('payments')
+                    .select('amount')
+                    .eq('vendor_bill_id', paymentRow.vendor_bill_id);
+
+                const { data: billRow } = await supabase
+                    .from('vendor_bills')
+                    .select('id, total_amount')
+                    .eq('id', paymentRow.vendor_bill_id)
+                    .single();
+
+                if (billRow) {
+                    const totalPaidOther = (remainingPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+                    const billTotal = Number(billRow.total_amount) || 0;
+                    let newStatus = 'unpaid';
+                    if (totalPaidOther >= billTotal && billTotal > 0) {
+                        newStatus = 'paid';
+                    } else if (totalPaidOther > 0) {
+                        newStatus = 'partial';
+                    }
+                    await supabase
+                        .from('vendor_bills')
+                        .update({ payment_status: newStatus })
+                        .eq('id', paymentRow.vendor_bill_id);
+                }
+            }
+
+            toast.success(`Payment #${paymentNumber || ''} deleted successfully`);
+            setPaymentToDelete(null);
+            await fetchVendorAndPayments();
+        } catch (err) {
+            console.error('Error deleting payment:', err);
+            toast.error(`Failed to delete payment: ${err.message || 'Unknown error'}`);
+        } finally {
+            setDeletingPaymentId(null);
         }
     };
 
@@ -267,13 +357,27 @@ export default function VendorPaymentsPage() {
                                                 <Badge variant={payment.status}>{payment.status}</Badge>
                                             </td>
                                             <td className="p-4 text-center">
-                                                <button
-                                                    onClick={() => router.push(`/vendor/${vendorId}/payments/${payment.id}`)}
-                                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-block"
-                                                    title="View Details"
-                                                >
-                                                    <ChevronRight size={20} />
-                                                </button>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <button
+                                                        onClick={() => router.push(`/vendor/${vendorId}/payments/${payment.id}`)}
+                                                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors inline-block cursor-pointer"
+                                                        title="View Details"
+                                                    >
+                                                        <ChevronRight size={20} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setPaymentToDelete(payment)}
+                                                        disabled={deletingPaymentId === payment.id}
+                                                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-block cursor-pointer disabled:opacity-50"
+                                                        title="Delete Payment"
+                                                    >
+                                                        {deletingPaymentId === payment.id ? (
+                                                            <Loader2 size={18} className="animate-spin text-red-500" />
+                                                        ) : (
+                                                            <Trash2 size={18} />
+                                                        )}
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -282,6 +386,100 @@ export default function VendorPaymentsPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Delete Payment Confirmation Modal */}
+                {paymentToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden transform transition-all">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+                                            <Trash2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">Delete Payment</h3>
+                                            <p className="text-xs text-gray-500">This action cannot be undone</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => !deletingPaymentId && setPaymentToDelete(null)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-sm text-gray-600">
+                                        Are you sure you want to delete this payment voucher? It will be permanently removed from this vendor&#39;s records and any linked bill balance will be updated.
+                                    </p>
+
+                                    <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-1.5 text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Payment No:</span>
+                                            <span className="font-mono font-bold text-gray-900">#{paymentToDelete.payment_number || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Payment Date:</span>
+                                            <span className="font-mono text-gray-700">
+                                                {new Date(paymentToDelete.payment_date).toLocaleDateString('en-GB')}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Method:</span>
+                                            <span className="font-bold text-gray-800 uppercase">{paymentToDelete.payment_method?.replace('_', ' ') || 'RECEIPT'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Amount:</span>
+                                            <span className="font-mono font-bold text-emerald-600">
+                                                ₹{Number(paymentToDelete.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        {paymentToDelete.status && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-medium">Status:</span>
+                                                <span className="uppercase font-bold tracking-wider text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                                    {paymentToDelete.status}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentToDelete(null)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-300 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeletePayment(paymentToDelete.id, paymentToDelete.payment_number)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {deletingPaymentId === paymentToDelete.id ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Deleting...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash2 className="w-4 h-4" />
+                                                <span>Delete Payment</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

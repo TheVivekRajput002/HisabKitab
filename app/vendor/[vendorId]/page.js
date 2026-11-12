@@ -17,9 +17,12 @@ import {
     Loader2,
     ArrowUpRight,
     ArrowDownLeft,
-    CheckCircle2
+    CheckCircle2,
+    Trash2,
+    X
 } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { toast } from '@/components/ToastProvider';
 
 // Helper to format date matching statement style: 29-Jun-26
 const formatLedgerDate = (dateStr) => {
@@ -52,6 +55,10 @@ export default function VendorDetailPage() {
     const [payments, setPayments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [deletingBillId, setDeletingBillId] = useState(null);
+    const [billToDelete, setBillToDelete] = useState(null);
+    const [deletingPaymentId, setDeletingPaymentId] = useState(null);
+    const [paymentToDelete, setPaymentToDelete] = useState(null);
 
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
@@ -195,6 +202,151 @@ export default function VendorDetailPage() {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleDeleteBill = async (billId, billNumber) => {
+        if (!billId) return;
+        setDeletingBillId(billId);
+        try {
+            // 1. Unlink any payments referencing this vendor bill to prevent FK constraint failure
+            const { error: unlinkError } = await supabase
+                .from('payments')
+                .update({ vendor_bill_id: null })
+                .eq('vendor_bill_id', billId);
+
+            if (unlinkError) {
+                console.warn('Could not unlink payments from vendor bill:', unlinkError);
+            }
+
+            // 2. Fetch bill to check if invoice photo exists in Supabase storage
+            const { data: billData } = await supabase
+                .from('vendor_bills')
+                .select('photo_url')
+                .eq('id', billId)
+                .single();
+
+            if (billData?.photo_url) {
+                try {
+                    await supabase.storage
+                        .from('vendor-photos')
+                        .remove([billData.photo_url]);
+                } catch (storageErr) {
+                    console.warn('Could not remove photo from storage:', storageErr);
+                }
+            }
+
+            // 3. Delete vendor bill items first
+            const { error: itemsError } = await supabase
+                .from('vendor_bill_items')
+                .delete()
+                .eq('vendor_bill_id', billId);
+
+            if (itemsError) throw itemsError;
+
+            // 4. Delete the vendor bill
+            const { error: billError } = await supabase
+                .from('vendor_bills')
+                .delete()
+                .eq('id', billId);
+
+            if (billError) throw billError;
+
+            toast.success(`Bill #${billNumber || ''} deleted successfully`);
+            setBillToDelete(null);
+            await fetchVendorLedgerData();
+        } catch (err) {
+            console.error('Error deleting bill:', err);
+            toast.error(`Failed to delete bill: ${err.message || 'Unknown error'}`);
+        } finally {
+            setDeletingBillId(null);
+        }
+    };
+
+    const handleDeletePayment = async (paymentId, paymentNumber) => {
+        if (!paymentId) return;
+        setDeletingPaymentId(paymentId);
+        try {
+            // 1. Fetch payment details and remove photo from storage if exists
+            const { data: detailsData } = await supabase
+                .from('payment_details')
+                .select('id, cheque_photo_url')
+                .eq('payment_id', paymentId);
+
+            if (detailsData && detailsData.length > 0) {
+                for (const d of detailsData) {
+                    if (d.cheque_photo_url) {
+                        try {
+                            await supabase.storage
+                                .from('cheque-photos')
+                                .remove([d.cheque_photo_url]);
+                        } catch (storageErr) {
+                            console.warn('Could not remove photo from cheque-photos:', storageErr);
+                        }
+                    }
+                }
+            }
+
+            // 2. Fetch payment row to check linked vendor_bill_id
+            const { data: paymentRow } = await supabase
+                .from('payments')
+                .select('vendor_bill_id')
+                .eq('id', paymentId)
+                .single();
+
+            // 3. Delete from payment_details first
+            const { error: detailsErr } = await supabase
+                .from('payment_details')
+                .delete()
+                .eq('payment_id', paymentId);
+
+            if (detailsErr) throw detailsErr;
+
+            // 4. Delete payment from payments table
+            const { error: payErr } = await supabase
+                .from('payments')
+                .delete()
+                .eq('id', paymentId);
+
+            if (payErr) throw payErr;
+
+            // 5. If this payment settled a bill, recalculate and update bill payment_status
+            if (paymentRow?.vendor_bill_id) {
+                const { data: remainingPayments } = await supabase
+                    .from('payments')
+                    .select('amount')
+                    .eq('vendor_bill_id', paymentRow.vendor_bill_id);
+
+                const { data: billRow } = await supabase
+                    .from('vendor_bills')
+                    .select('id, total_amount')
+                    .eq('id', paymentRow.vendor_bill_id)
+                    .single();
+
+                if (billRow) {
+                    const totalPaidOther = (remainingPayments || []).reduce((sum, p) => sum + Number(p.amount), 0);
+                    const billTotal = Number(billRow.total_amount) || 0;
+                    let newStatus = 'unpaid';
+                    if (totalPaidOther >= billTotal && billTotal > 0) {
+                        newStatus = 'paid';
+                    } else if (totalPaidOther > 0) {
+                        newStatus = 'partial';
+                    }
+                    await supabase
+                        .from('vendor_bills')
+                        .update({ payment_status: newStatus })
+                        .eq('id', paymentRow.vendor_bill_id);
+                }
+            }
+
+            toast.success(`Payment #${paymentNumber || ''} deleted successfully`);
+            setPaymentToDelete(null);
+            await fetchVendorLedgerData();
+        } catch (err) {
+            console.error('Error deleting payment:', err);
+            toast.error(`Failed to delete payment: ${err.message || 'Unknown error'}`);
+        } finally {
+            setDeletingPaymentId(null);
+        }
     };
 
     if (loading) {
@@ -419,7 +571,8 @@ export default function VendorDetailPage() {
                                     <th className="py-3 px-3.5 w-32 text-left border-r border-gray-700">Vch Type</th>
                                     <th className="py-3 px-3.5 w-32 text-left border-r border-gray-700">Vch No.</th>
                                     <th className="py-3 px-4 w-32 text-right border-r border-gray-700">Debit (₹)</th>
-                                    <th className="py-3 px-4 w-32 text-right">Credit (₹)</th>
+                                    <th className="py-3 px-4 w-32 text-right border-r border-gray-700 print:border-r-0">Credit (₹)</th>
+                                    <th className="py-3 px-3 w-16 text-center print:hidden">Action</th>
                                 </tr>
                             </thead>
 
@@ -435,15 +588,16 @@ export default function VendorDetailPage() {
                                     <td className="py-3 px-4 text-right font-bold font-mono text-gray-900 border-r border-gray-200">
                                         {totals.totalDebit > totals.totalCredit ? formatAmount(totals.totalDebit - totals.totalCredit) : ''}
                                     </td>
-                                    <td className="py-3 px-4 text-right font-bold font-mono text-gray-900">
+                                    <td className="py-3 px-4 text-right font-bold font-mono text-gray-900 border-r border-gray-200 print:border-r-0">
                                         {totals.totalCredit > totals.totalDebit ? formatAmount(totals.totalCredit - totals.totalDebit) : ''}
                                     </td>
+                                    <td className="py-3 px-3 print:hidden"></td>
                                 </tr>
 
                                 {/* Transaction Rows */}
                                 {ledgerStatement.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="py-10 text-center text-gray-500 font-medium">
+                                        <td colSpan={7} className="py-10 text-center text-gray-500 font-medium">
                                             No transaction vouchers found for this vendor.
                                         </td>
                                     </tr>
@@ -465,8 +619,38 @@ export default function VendorDetailPage() {
                                             <td className="py-2.5 px-4 text-right font-mono font-bold text-gray-900 border-r border-gray-200">
                                                 {item.debit > 0 ? formatAmount(item.debit) : ''}
                                             </td>
-                                            <td className="py-2.5 px-4 text-right font-mono font-bold text-gray-900">
+                                            <td className="py-2.5 px-4 text-right font-mono font-bold text-gray-900 border-r border-gray-200 print:border-r-0">
                                                 {item.credit > 0 ? formatAmount(item.credit) : ''}
+                                            </td>
+                                            <td className="py-2.5 px-3 text-center print:hidden">
+                                                {item.type === 'bill' && (
+                                                    <button
+                                                        onClick={() => setBillToDelete(item.rawObj)}
+                                                        disabled={deletingBillId === item.rawObj.id}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center group disabled:opacity-50"
+                                                        title={`Delete Bill #${item.rawObj.bill_number || ''}`}
+                                                    >
+                                                        {deletingBillId === item.rawObj.id ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+                                                        ) : (
+                                                            <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                                        )}
+                                                    </button>
+                                                )}
+                                                {item.type === 'payment' && (
+                                                    <button
+                                                        onClick={() => setPaymentToDelete(item.rawObj)}
+                                                        disabled={deletingPaymentId === item.rawObj.id}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer inline-flex items-center justify-center group disabled:opacity-50"
+                                                        title={`Delete Payment #${item.rawObj.payment_number || item.rawObj.id || ''}`}
+                                                    >
+                                                        {deletingPaymentId === item.rawObj.id ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+                                                        ) : (
+                                                            <Trash2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                                                        )}
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     ))
@@ -480,9 +664,10 @@ export default function VendorDetailPage() {
                                     <td className="py-3 px-4 text-right font-mono border-r border-gray-300">
                                         {formatAmount(totals.totalDebit)}
                                     </td>
-                                    <td className="py-3 px-4 text-right font-mono">
+                                    <td className="py-3 px-4 text-right font-mono border-r border-gray-300 print:border-r-0">
                                         {formatAmount(totals.totalCredit)}
                                     </td>
+                                    <td className="py-3 px-3 print:hidden"></td>
                                 </tr>
 
                                 {/* Closing Balance Row */}
@@ -496,9 +681,10 @@ export default function VendorDetailPage() {
                                     <td className="py-2.5 px-4 text-right font-mono border-r border-gray-300">
                                         {totals.balanceSide === 'Dr' ? formatAmount(totals.netBalance) : ''}
                                     </td>
-                                    <td className="py-2.5 px-4 text-right font-mono">
+                                    <td className="py-2.5 px-4 text-right font-mono border-r border-gray-300 print:border-r-0">
                                         {totals.balanceSide === 'Cr' ? formatAmount(totals.netBalance) : ''}
                                     </td>
+                                    <td className="py-2.5 px-3 print:hidden"></td>
                                 </tr>
 
                                 {/* Equalized Grand Total Row (Matching Statement Bottom Line) */}
@@ -509,14 +695,191 @@ export default function VendorDetailPage() {
                                     <td className="py-3 px-4 text-right font-mono border-r border-gray-700">
                                         ₹{formatAmount(totals.grandTotal)}
                                     </td>
-                                    <td className="py-3 px-4 text-right font-mono">
+                                    <td className="py-3 px-4 text-right font-mono border-r border-gray-700 print:border-r-0">
                                         ₹{formatAmount(totals.grandTotal)}
                                     </td>
+                                    <td className="py-3 px-3 print:hidden"></td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                {/* Delete Bill Confirmation Modal */}
+                {billToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden transform transition-all">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+                                            <Trash2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">Delete Vendor Bill</h3>
+                                            <p className="text-xs text-gray-500">This action cannot be undone</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => !deletingBillId && setBillToDelete(null)}
+                                        disabled={deletingBillId !== null}
+                                        className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-sm text-gray-600">
+                                        Are you sure you want to delete this bill? It will be permanently removed from this vendor&#39;s statement and all associated line items will be deleted.
+                                    </p>
+
+                                    <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-1.5 text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Bill Number:</span>
+                                            <span className="font-mono font-bold text-gray-900">#{billToDelete.bill_number || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Bill Date:</span>
+                                            <span className="font-mono text-gray-700">{formatLedgerDate(billToDelete.bill_date || billToDelete.created_at)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Total Amount:</span>
+                                            <span className="font-mono font-bold text-red-600">₹{formatAmount(billToDelete.total_amount)}</span>
+                                        </div>
+                                        {billToDelete.payment_status && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-medium">Payment Status:</span>
+                                                <span className="uppercase font-bold tracking-wider text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                                    {billToDelete.payment_status}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBillToDelete(null)}
+                                        disabled={deletingBillId !== null}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-300 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteBill(billToDelete.id, billToDelete.bill_number)}
+                                        disabled={deletingBillId !== null}
+                                        className="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {deletingBillId === billToDelete.id ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Deleting...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash2 className="w-4 h-4" />
+                                                <span>Delete Bill</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Delete Payment Confirmation Modal */}
+                {paymentToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden transform transition-all">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+                                            <Trash2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">Delete Payment</h3>
+                                            <p className="text-xs text-gray-500">This action cannot be undone</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => !deletingPaymentId && setPaymentToDelete(null)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-sm text-gray-600">
+                                        Are you sure you want to delete this payment voucher? It will be permanently removed from this vendor&#39;s ledger statement and the outstanding balance will be updated.
+                                    </p>
+
+                                    <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-1.5 text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Payment No:</span>
+                                            <span className="font-mono font-bold text-gray-900">#{paymentToDelete.payment_number || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Payment Date:</span>
+                                            <span className="font-mono text-gray-700">{formatLedgerDate(paymentToDelete.payment_date || paymentToDelete.created_at)}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Payment Method:</span>
+                                            <span className="font-bold text-gray-800 uppercase">{paymentToDelete.payment_method?.replace('_', ' ') || 'RECEIPT'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Amount:</span>
+                                            <span className="font-mono font-bold text-emerald-600">₹{formatAmount(paymentToDelete.amount)}</span>
+                                        </div>
+                                        {paymentToDelete.status && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-medium">Status:</span>
+                                                <span className="uppercase font-bold tracking-wider text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                                    {paymentToDelete.status}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPaymentToDelete(null)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-300 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeletePayment(paymentToDelete.id, paymentToDelete.payment_number)}
+                                        disabled={deletingPaymentId !== null}
+                                        className="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {deletingPaymentId === paymentToDelete.id ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Deleting...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash2 className="w-4 h-4" />
+                                                <span>Delete Payment</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
             </div>
         </div>

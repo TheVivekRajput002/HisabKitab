@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, FileText, Calendar, DollarSign, AlertCircle, Loader2, Package, ChevronDown, ChevronUp, Download, Eye, CreditCard } from 'lucide-react';
+import { ArrowLeft, FileText, Calendar, DollarSign, AlertCircle, Loader2, Package, ChevronDown, ChevronUp, Download, Eye, CreditCard, Trash2, X } from 'lucide-react';
 import { supabase } from '@/utils/supabaseClient';
+import { toast } from '@/components/ToastProvider';
 
 // ============================================================================
 // UI COMPONENTS
@@ -65,7 +66,7 @@ const toNumber = (value) => {
 // BILL CARD COMPONENT
 // ============================================================================
 
-function BillCard({ bill, onViewDetails }) {
+function BillCard({ bill, onViewDetails, onDelete, deletingId }) {
     const params = useParams();
     const router = useRouter();
     const vendorId = params.vendorId || params.id;
@@ -221,6 +222,21 @@ function BillCard({ bill, onViewDetails }) {
                             View Payment{bill.payments.length > 1 ? 's' : ''}
                         </button>
                     )}
+
+                    {onDelete && (
+                        <button
+                            onClick={() => onDelete(bill)}
+                            disabled={deletingId === bill.id}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 rounded-lg transition-colors text-sm font-medium shadow-sm ml-auto cursor-pointer disabled:opacity-50"
+                        >
+                            {deletingId === bill.id ? (
+                                <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                                <Trash2 size={16} />
+                            )}
+                            Delete Bill
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -337,6 +353,8 @@ export default function VendorBillsPage() {
     const [bills, setBills] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [deletingBillId, setDeletingBillId] = useState(null);
+    const [billToDelete, setBillToDelete] = useState(null);
     const [stats, setStats] = useState({
         total: 0,
         paidAmount: 0,
@@ -406,6 +424,64 @@ export default function VendorBillsPage() {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleDeleteBill = async (billId, billNumber) => {
+        if (!billId) return;
+        setDeletingBillId(billId);
+        try {
+            // 1. Unlink any payments referencing this vendor bill
+            const { error: unlinkError } = await supabase
+                .from('payments')
+                .update({ vendor_bill_id: null })
+                .eq('vendor_bill_id', billId);
+
+            if (unlinkError) {
+                console.warn('Could not unlink payments from vendor bill:', unlinkError);
+            }
+
+            // 2. Fetch bill to check if invoice photo exists in Supabase storage
+            const { data: billData } = await supabase
+                .from('vendor_bills')
+                .select('photo_url')
+                .eq('id', billId)
+                .single();
+
+            if (billData?.photo_url) {
+                try {
+                    await supabase.storage
+                        .from('vendor-photos')
+                        .remove([billData.photo_url]);
+                } catch (storageErr) {
+                    console.warn('Could not remove photo from storage:', storageErr);
+                }
+            }
+
+            // 3. Delete vendor bill items first
+            const { error: itemsError } = await supabase
+                .from('vendor_bill_items')
+                .delete()
+                .eq('vendor_bill_id', billId);
+
+            if (itemsError) throw itemsError;
+
+            // 4. Delete the vendor bill
+            const { error: billError } = await supabase
+                .from('vendor_bills')
+                .delete()
+                .eq('id', billId);
+
+            if (billError) throw billError;
+
+            toast.success(`Bill #${billNumber || ''} deleted successfully`);
+            setBillToDelete(null);
+            await fetchVendorAndBills();
+        } catch (err) {
+            console.error('Error deleting bill:', err);
+            toast.error(`Failed to delete bill: ${err.message || 'Unknown error'}`);
+        } finally {
+            setDeletingBillId(null);
         }
     };
 
@@ -542,8 +618,107 @@ export default function VendorBillsPage() {
                     <div className="space-y-4">
                         <h2 className="text-xl font-bold text-gray-800 mb-4">Bills History</h2>
                         {bills.map((bill) => (
-                            <BillCard key={bill.id} bill={bill} />
+                            <BillCard 
+                                key={bill.id} 
+                                bill={bill} 
+                                onDelete={(b) => setBillToDelete(b)}
+                                deletingId={deletingBillId}
+                            />
                         ))}
+                    </div>
+                )}
+
+                {/* Delete Confirmation Modal */}
+                {billToDelete && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden transform transition-all">
+                            <div className="p-6">
+                                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center text-red-600">
+                                            <Trash2 className="w-5 h-5" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">Delete Vendor Bill</h3>
+                                            <p className="text-xs text-gray-500">This action cannot be undone</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => !deletingBillId && setBillToDelete(null)}
+                                        disabled={deletingBillId !== null}
+                                        className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                                    >
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    <p className="text-sm text-gray-600">
+                                        Are you sure you want to delete this bill? It will be permanently removed from this vendor&#39;s records and all associated line items will be deleted.
+                                    </p>
+
+                                    <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200 space-y-1.5 text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Bill Number:</span>
+                                            <span className="font-mono font-bold text-gray-900">#{billToDelete.bill_number || 'N/A'}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Bill Date:</span>
+                                            <span className="font-mono text-gray-700">
+                                                {new Date(billToDelete.bill_date).toLocaleDateString('en-IN', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric'
+                                                })}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-gray-500 font-medium">Total Amount:</span>
+                                            <span className="font-mono font-bold text-red-600">
+                                                ₹{Number(billToDelete.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                        {billToDelete.payment_status && (
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-gray-500 font-medium">Payment Status:</span>
+                                                <span className="uppercase font-bold tracking-wider text-[10px] px-2 py-0.5 rounded bg-gray-200 text-gray-700">
+                                                    {billToDelete.payment_status}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="mt-6 flex items-center justify-end gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setBillToDelete(null)}
+                                        disabled={deletingBillId !== null}
+                                        className="px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-xl border border-gray-300 transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteBill(billToDelete.id, billToDelete.bill_number)}
+                                        disabled={deletingBillId !== null}
+                                        className="inline-flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50"
+                                    >
+                                        {deletingBillId === billToDelete.id ? (
+                                            <>
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span>Deleting...</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Trash2 className="w-4 h-4" />
+                                                <span>Delete Bill</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
